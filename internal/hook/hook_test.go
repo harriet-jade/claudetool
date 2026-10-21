@@ -228,15 +228,15 @@ func TestRegisterPanicsOnDashPrefix(t *testing.T) {
 func TestHandlersRegistered(t *testing.T) {
 	names := handlers()
 	want := map[string]bool{
-		"no-cd":              true,
-		"no-diff-master":     true,
-		"use-linear-mcp":     true,
-		"go-swallowed-error": true,
-		"go-augment-style":   true,
-		"redirect-writes":    true,
-		"dump":               true,
-		"backend101":         true,
-		"go-fix":             true,
+		"no-cd":            true,
+		"no-diff-master":   true,
+		"use-linear-mcp":   true,
+		"semgrep":          true,
+		"go-augment-style": true,
+		"redirect-writes":  true,
+		"dump":             true,
+		"backend101":       true,
+		"go-fix":           true,
 	}
 	for _, n := range names {
 		delete(want, n)

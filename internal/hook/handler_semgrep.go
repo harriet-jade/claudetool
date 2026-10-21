@@ -93,7 +93,9 @@ func parseSemgrepOutput(data []byte) string {
 
 	var b strings.Builder
 	for _, r := range result.Results {
-		fmt.Fprintf(&b, "  %s:%d: [%s] %s\n", r.Path, r.Start.Line, r.CheckID, r.Extra.Message)
+		// semgrep prefixes each rule id with the dotted path of the temp config file.
+		ruleID := r.CheckID[strings.LastIndex(r.CheckID, ".")+1:]
+		fmt.Fprintf(&b, "  %s:%d: [%s] %s\n", r.Path, r.Start.Line, ruleID, r.Extra.Message)
 	}
 	return b.String()
 }

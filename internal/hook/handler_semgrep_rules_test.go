@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestGoSwallowedErrorBlocks(t *testing.T) {
+func TestSemgrepSwallowedErrorBlocks(t *testing.T) {
 	if _, err := exec.LookPath("semgrep"); err != nil {
 		t.Skip("semgrep not installed")
 	}
@@ -40,7 +40,7 @@ func something() error { return nil }
 	})
 
 	var stdout, stderr bytes.Buffer
-	code := Run([]string{"go-swallowed-error"}, strings.NewReader(input), &stdout, &stderr)
+	code := Run([]string{"semgrep"}, strings.NewReader(input), &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit code = %d, want 0; stderr: %s", code, stderr.String())
 	}
@@ -57,7 +57,49 @@ func something() error { return nil }
 	}
 }
 
-func TestGoSwallowedErrorAllowsCommented(t *testing.T) {
+func TestSemgrepClockNowBlocks(t *testing.T) {
+	if _, err := exec.LookPath("semgrep"); err != nil {
+		t.Skip("semgrep not installed")
+	}
+
+	f, err := os.CreateTemp(t.TempDir(), "clock-*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(`package main
+
+import "time"
+
+func today() time.Time {
+	return time.Now()
+}
+`)
+	f.Close()
+
+	input := makeToolInput("PostToolUse", "Write", WriteInput{
+		FilePath: f.Name(),
+		Content:  "ignored",
+	})
+
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"semgrep"}, strings.NewReader(input), &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d, want 0; stderr: %s", code, stderr.String())
+	}
+
+	var out Output
+	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal output: %v\nstdout: %s", err, stdout.String())
+	}
+	if out.Decision != "block" {
+		t.Errorf("decision = %q, want block", out.Decision)
+	}
+	if !strings.Contains(out.Reason, "[use-clock-now]") {
+		t.Errorf("reason = %q, want mention of use-clock-now", out.Reason)
+	}
+}
+
+func TestSemgrepSwallowedErrorAllowsCommented(t *testing.T) {
 	if _, err := exec.LookPath("semgrep"); err != nil {
 		t.Skip("semgrep not installed")
 	}
@@ -88,13 +130,13 @@ func something() error { return nil }
 		Content:  "ignored",
 	})
 
-	code, stderr := runHandler(t, "go-swallowed-error", input)
+	code, stderr := runHandler(t, "semgrep", input)
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0 (commented swallow is OK); stderr: %s", code, stderr)
 	}
 }
 
-func TestGoSwallowedErrorAllowsPropagated(t *testing.T) {
+func TestSemgrepSwallowedErrorAllowsPropagated(t *testing.T) {
 	if _, err := exec.LookPath("semgrep"); err != nil {
 		t.Skip("semgrep not installed")
 	}
@@ -123,7 +165,7 @@ func something() error { return nil }
 		Content:  "ignored",
 	})
 
-	code, stderr := runHandler(t, "go-swallowed-error", input)
+	code, stderr := runHandler(t, "semgrep", input)
 	if code != 0 {
 		t.Errorf("exit code = %d, want 0 (clean file); stderr: %s", code, stderr)
 	}
