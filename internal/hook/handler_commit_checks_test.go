@@ -62,7 +62,7 @@ func TestChangedGoPackages(t *testing.T) {
 	}, "\n")
 
 	// WHEN - The changed packages are worked out.
-	packages, services := changedGoPackages(root, changedPaths(status))
+	packages, services := changedGoPackages(root, parseStatus(status))
 
 	// THEN - The service is checked as a whole, the library by package, and vendor is skipped.
 	if want := []string{"./libraries/money", "./service.foo/..."}; !reflect.DeepEqual(packages, want) {

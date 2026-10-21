@@ -54,10 +54,14 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	if err != nil {
 		return nil, nil
 	}
-	packages, services := changedGoPackages(root, changedPaths(status))
+	entries := parseStatus(status)
+	packages, services := changedGoPackages(root, entries)
 	if len(packages) == 0 {
 		return nil, nil
 	}
+
+	// The tests must see the curly quotes, because those are the strings that get committed.
+	curlNote := curlChangedFiles(root, entries)
 
 	checks := [][]string{
 		append([]string{"go", "test"}, packages...),
@@ -80,20 +84,37 @@ func handleCommitChecks(in *Input) (*Output, error) {
 		}
 		failures = append(failures, fmt.Sprintf("$ %s\n%s", strings.Join(check, " "), lastLines(string(out), maxCheckOutputLines)))
 	}
-	if len(failures) == 0 {
-		// The review is slow, so run it only after the checks pass.
-		if feedback := reviewConstants(root); feedback != "" {
-			return nil, fmt.Errorf("blocked: the constants review asked for changes, so the commit did not run. "+
-				"Fix these, then commit again:\n\n%s", feedback)
-		}
-		return nil, nil
+	if len(failures) > 0 {
+		return nil, fmt.Errorf(
+			"blocked: commit checks failed, so the commit did not run. Fix the problems below, "+
+				"then commit again. If a failure was already there before your change, tell the "+
+				"user, and commit with `git commit --no-verify` only if they agree.\n\n%s%s",
+			strings.Join(failures, "\n\n"), withNote(curlNote))
 	}
 
-	return nil, fmt.Errorf(
-		"blocked: commit checks failed, so the commit did not run. Fix the problems below, "+
-			"then commit again. If a failure was already there before your change, tell the "+
-			"user, and commit with `git commit --no-verify` only if they agree.\n\n%s",
-		strings.Join(failures, "\n\n"))
+	var notes []string
+	if curlNote != "" {
+		notes = append(notes, curlNote)
+	}
+	// The review is slow, so run it last.
+	if feedback := reviewConstants(root); feedback != "" {
+		notes = append(notes, "The constants review suggests these changes. The commit still runs, "+
+			"so decide which are worth a follow-up commit:\n"+feedback)
+	}
+	if len(notes) == 0 {
+		return nil, nil
+	}
+	return &Output{HookSpecificOutput: &HookSpecificOutput{
+		HookEventName:     "PreToolUse",
+		AdditionalContext: strings.Join(notes, "\n\n"),
+	}}, nil
+}
+
+func withNote(note string) string {
+	if note == "" {
+		return ""
+	}
+	return "\n\n" + note
 }
 
 // checkedGitCommitDir finds a `git commit` without --no-verify in command and
@@ -146,10 +167,18 @@ func gitSubcommand(args []string) (string, []string) {
 	return "", nil
 }
 
-// changedPaths returns the paths in `git status --porcelain=v1` output,
+// statusEntry is one changed file from `git status --porcelain=v1`.
+type statusEntry struct {
+	path      string
+	staged    bool
+	unstaged  bool
+	untracked bool
+}
+
+// parseStatus returns the changed files in `git status --porcelain=v1` output,
 // skipping deleted files.
-func changedPaths(status string) []string {
-	var paths []string
+func parseStatus(status string) []statusEntry {
+	var entries []statusEntry
 	for _, line := range strings.Split(status, "\n") {
 		if len(line) < 4 || strings.Contains(line[:2], "D") {
 			continue
@@ -158,21 +187,31 @@ func changedPaths(status string) []string {
 		if _, renamedTo, ok := strings.Cut(path, " -> "); ok {
 			path = renamedTo
 		}
-		paths = append(paths, path)
+		entries = append(entries, statusEntry{
+			path:      path,
+			staged:    line[0] != ' ' && line[0] != '?',
+			unstaged:  line[1] != ' ',
+			untracked: line[:2] == "??",
+		})
 	}
-	return paths
+	return entries
 }
 
-// changedGoPackages turns changed file paths into package patterns for go
-// test and staticcheck, plus the service patterns for svcchecker.
-func changedGoPackages(root string, paths []string) (packages, services []string) {
+// isChangedGoFile reports whether a changed file is Go code that the checks cover.
+func isChangedGoFile(entry statusEntry) bool {
+	return strings.HasSuffix(entry.path, ".go") && !strings.HasPrefix(entry.path, "vendor/")
+}
+
+// changedGoPackages turns changed files into package patterns for go test and
+// staticcheck, plus the service patterns for svcchecker.
+func changedGoPackages(root string, entries []statusEntry) (packages, services []string) {
 	packageSet := map[string]bool{}
 	serviceSet := map[string]bool{}
-	for _, path := range paths {
-		if !strings.HasSuffix(path, ".go") || strings.HasPrefix(path, "vendor/") {
+	for _, entry := range entries {
+		if !isChangedGoFile(entry) {
 			continue
 		}
-		dir := filepath.Dir(path)
+		dir := filepath.Dir(entry.path)
 		if _, err := os.Stat(filepath.Join(root, dir)); err != nil {
 			continue
 		}

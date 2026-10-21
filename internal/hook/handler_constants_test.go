@@ -1,6 +1,8 @@
 package hook
 
 import (
+	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -31,7 +33,7 @@ func TestMayNeedConstantReview(t *testing.T) {
 	}
 }
 
-func TestCommitChecksBlocksOnConstantsReview(t *testing.T) {
+func TestCommitChecksPassesOnConstantsAdvice(t *testing.T) {
 	// GIVEN - A git repo whose passing test file adds a constant...
 	root := newGoRepo(t, "if ThreeMinutes == 0 { t.Fatal(\"wrong\") }")
 	writeRepoFile(t, root, "calc/calc.go", "package calc\n\nimport \"time\"\n\nconst ThreeMinutes = 3 * time.Minute\n")
@@ -39,14 +41,17 @@ func TestCommitChecksBlocksOnConstantsReview(t *testing.T) {
 	prompt := stubConstantsReviewer(t, "REVISE\n- calc/calc.go: ThreeMinutes only repeats its value -> inline it")
 
 	// WHEN - Claude tries to commit.
-	code, stderr := runCommitChecks(t, root, `git commit -m "change"`)
+	toolInput, _ := json.Marshal(BashInput{Command: `git commit -m "change"`})
+	input, _ := json.Marshal(Input{HookEventName: "PreToolUse", ToolName: "Bash", ToolInput: toolInput, CWD: root})
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"commit-checks"}, bytes.NewReader(input), &stdout, &stderr)
 
-	// THEN - The commit is blocked with the reviewer's feedback...
-	if code != 2 {
-		t.Fatalf("exit = %d, want 2 (block); stderr: %s", code, stderr)
+	// THEN - The commit is allowed, and Claude gets the reviewer's advice...
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0 (allow); stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stderr, "ThreeMinutes only repeats its value") {
-		t.Errorf("stderr = %q, want the reviewer's feedback", stderr)
+	if !strings.Contains(stdout.String(), "ThreeMinutes only repeats its value") {
+		t.Errorf("stdout = %q, want the reviewer's advice", stdout.String())
 	}
 	// ...and the reviewer was given the new file.
 	if !strings.Contains(*prompt, "NEW FILE calc/calc.go") {
