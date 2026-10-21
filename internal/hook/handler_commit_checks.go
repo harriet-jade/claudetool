@@ -81,6 +81,11 @@ func handleCommitChecks(in *Input) (*Output, error) {
 		failures = append(failures, fmt.Sprintf("$ %s\n%s", strings.Join(check, " "), lastLines(string(out), maxCheckOutputLines)))
 	}
 	if len(failures) == 0 {
+		// The review is slow, so run it only after the checks pass.
+		if feedback := reviewConstants(root); feedback != "" {
+			return nil, fmt.Errorf("blocked: the constants review asked for changes, so the commit did not run. "+
+				"Fix these, then commit again:\n\n%s", feedback)
+		}
 		return nil, nil
 	}
 

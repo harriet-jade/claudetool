@@ -1,6 +1,10 @@
 package hook
 
-import "testing"
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestMayNeedConstantReview(t *testing.T) {
 	// GIVEN - Changed code that may or may not need a constants review.
@@ -27,25 +31,39 @@ func TestMayNeedConstantReview(t *testing.T) {
 	}
 }
 
-func TestConstantsReviewsTestFiles(t *testing.T) {
-	// GIVEN - The constants reviewer, with a stub that records whether it ran.
-	called := false
-	review := asyncReview{
-		name:         "constants",
-		fileSuffixes: []string{".go"},
-		precheck:     mayNeedConstantReview,
-		rubric:       constantsRubric,
-		review: func(prompt, model string) (string, error) {
-			called = true
-			return "PASS", nil
-		},
-	}
+func TestCommitChecksBlocksOnConstantsReview(t *testing.T) {
+	// GIVEN - A git repo whose passing test file adds a constant...
+	root := newGoRepo(t, "if ThreeMinutes == 0 { t.Fatal(\"wrong\") }")
+	writeRepoFile(t, root, "calc/calc.go", "package calc\n\nimport \"time\"\n\nconst ThreeMinutes = 3 * time.Minute\n")
+	// ...and a constants reviewer that asks for a change.
+	prompt := stubConstantsReviewer(t, "REVISE\n- calc/calc.go: ThreeMinutes only repeats its value -> inline it")
 
-	// WHEN - A test file with a constant is written.
-	invoke(t, review, "Write", WriteInput{FilePath: "/src/x_test.go", Content: "const ThreeMinutes = 3 * time.Minute"})
+	// WHEN - Claude tries to commit.
+	code, stderr := runCommitChecks(t, root, `git commit -m "change"`)
 
-	// THEN - The reviewer runs on it.
-	if !called {
-		t.Error("reviewer should run on _test.go files")
+	// THEN - The commit is blocked with the reviewer's feedback...
+	if code != 2 {
+		t.Fatalf("exit = %d, want 2 (block); stderr: %s", code, stderr)
 	}
+	if !strings.Contains(stderr, "ThreeMinutes only repeats its value") {
+		t.Errorf("stderr = %q, want the reviewer's feedback", stderr)
+	}
+	// ...and the reviewer was given the new file.
+	if !strings.Contains(*prompt, "NEW FILE calc/calc.go") {
+		t.Errorf("prompt does not contain the new file:\n%s", *prompt)
+	}
+}
+
+// stubConstantsReviewer makes the constants review answer verdict without starting claude.
+func stubConstantsReviewer(t *testing.T, verdict string) *string {
+	t.Helper()
+	prompt := new(string)
+	original, originalLog := constantsReviewer, asyncLogOverride
+	constantsReviewer = func(p, model, dir string) (string, error) {
+		*prompt = p
+		return verdict, nil
+	}
+	asyncLogOverride = filepath.Join(t.TempDir(), "async.log")
+	t.Cleanup(func() { constantsReviewer, asyncLogOverride = original, originalLog })
+	return prompt
 }

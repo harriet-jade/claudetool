@@ -269,7 +269,20 @@ FILE: %s
 `, rubric, filePath, text)
 }
 
-// runClaudeReview dispatches the prompt to a headless `claude` instance.
+// runClaudeReview dispatches the prompt to a headless `claude` instance with
+// no tools: it judges only the text it is given.
+func runClaudeReview(prompt, model string) (string, error) {
+	return runClaude(prompt, model, "", "--disallowed-tools", "Bash Edit Write Read Glob Grep WebFetch WebSearch")
+}
+
+// runClaudeReviewInRepo is like runClaudeReview, but the reviewer can read and search files in dir.
+func runClaudeReviewInRepo(prompt, model, dir string) (string, error) {
+	return runClaude(prompt, model, dir,
+		"--allowed-tools", "Read Grep Glob",
+		"--disallowed-tools", "Bash Edit Write WebFetch WebSearch")
+}
+
+// runClaude starts `claude -p` with the prompt on stdin.
 //
 //   - `--settings "{}"` stops the inner claude from inheriting the user's hooks,
 //     which avoids recursion and shaves startup latency.
@@ -281,19 +294,13 @@ FILE: %s
 //     intermittent failure that let unreviewed code through. We do NOT use
 //     `--bare`: it forces auth to ANTHROPIC_API_KEY only, never reading the
 //     OAuth/keychain credentials the reviewer relies on.
-//   - `--disallowed-tools` keeps the reviewer to pure text analysis; it never
-//     needs to touch the filesystem or run commands.
 //   - cmd.Env drops the host's CLAUDE_CODE_* / CLAUDECODE vars — see
 //     reviewerEnv for why.
-func runClaudeReview(prompt, model string) (string, error) {
-	cmd := exec.Command("claude",
-		"-p",
-		"--model", model,
-		"--settings", "{}",
-		"--strict-mcp-config",
-		"--disallowed-tools", "Bash Edit Write Read Glob Grep WebFetch WebSearch",
-		"--append-system-prompt", reviewerSystemPrompt,
-	)
+func runClaude(prompt, model, dir string, toolArgs ...string) (string, error) {
+	args := append([]string{"-p", "--model", model, "--settings", "{}", "--strict-mcp-config"}, toolArgs...)
+	args = append(args, "--append-system-prompt", reviewerSystemPrompt)
+	cmd := exec.Command("claude", args...)
+	cmd.Dir = dir
 	cmd.Env = reviewerEnv()
 	cmd.Stdin = strings.NewReader(prompt)
 	out, err := cmd.Output()

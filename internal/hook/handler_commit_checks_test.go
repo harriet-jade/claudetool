@@ -91,8 +91,10 @@ func TestCommitChecksBlocksFailingTest(t *testing.T) {
 }
 
 func TestCommitChecksAllowsPassingTest(t *testing.T) {
-	// GIVEN - A git repo with a changed package whose test passes.
+	// GIVEN - A git repo with a changed package whose test passes...
 	root := newGoRepo(t, "if 1+1 != 2 { t.Fatal(\"maths is broken\") }")
+	// ...and a constants review that passes.
+	stubConstantsReviewer(t, "PASS")
 
 	// WHEN - Claude tries to commit.
 	code, stderr := runCommitChecks(t, root, `git commit -m "change"`)
@@ -129,18 +131,23 @@ func newGoRepo(t *testing.T, testBody string) string {
 		"calc/calc_test.go": "package calc\n\nimport \"testing\"\n\nfunc TestCalc(t *testing.T) {\n\t" + testBody + "\n}\n",
 	}
 	for name, content := range files {
-		path := filepath.Join(root, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		writeRepoFile(t, root, name, content)
 	}
 	if out, err := exec.Command("git", "init", "-q", root).CombinedOutput(); err != nil {
 		t.Fatalf("git init: %v\n%s", err, out)
 	}
 	return root
+}
+
+func writeRepoFile(t *testing.T, root, name, content string) {
+	t.Helper()
+	path := filepath.Join(root, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func runCommitChecks(t *testing.T, cwd, command string) (int, string) {

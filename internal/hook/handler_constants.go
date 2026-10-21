@@ -1,22 +1,17 @@
 package hook
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-func init() {
-	Register("constants", asyncReview{
-		name:         "constants",
-		fileSuffixes: []string{".go"},
-		tier:         MediumBalanced, // sonnet by default; override with -tier
-		precheck:     mayNeedConstantReview,
-		rubric:       constantsRubric,
-		summary:      "Async review flagged a problem with constants:",
-	}.handler())
-}
+// constantsReviewer lets tests replace the real claude call.
+var constantsReviewer = runClaudeReviewInRepo
 
-// Matches a number other than 0 or 1, which are rarely unexplained values.
+// Skips 0 and 1: they are rarely unexplained values.
 var unexplainedNumberRe = regexp.MustCompile(`\b(\d*\.\d+|[2-9]|\d{2,})\b`)
 
 // mayNeedConstantReview is over-eager by design: a borderline hit costs one PASS.
@@ -24,12 +19,73 @@ func mayNeedConstantReview(text string) bool {
 	return strings.Contains(text, "const") || unexplainedNumberRe.MatchString(text)
 }
 
-const constantsRubric = `You are reviewing a change to a Go file. Judge ONLY how the change uses constants: where they are declared, and whether each value should or should not be a named constant. Ignore everything else.
+// reviewConstants returns what to fix in how the uncommitted Go changes in root use constants, or "" if nothing, or if the review can't run.
+func reviewConstants(root string) string {
+	// Ignore the error: a repo with no commits has no HEAD, and all its files are untracked.
+	diff, _ := gitOutput(root, "diff", "HEAD", "--", "*.go")
+	untracked, err := gitOutput(root, "ls-files", "--others", "--exclude-standard", "--", "*.go")
+	if err != nil {
+		return ""
+	}
+
+	var change, added strings.Builder
+	change.WriteString(diff)
+	for _, line := range strings.Split(diff, "\n") {
+		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+			added.WriteString(line + "\n")
+		}
+	}
+	for _, path := range strings.Fields(untracked) {
+		content, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(&change, "\nNEW FILE %s\n%s\n", path, content)
+		added.Write(content)
+	}
+	if !mayNeedConstantReview(added.String()) {
+		return ""
+	}
+
+	logAsync("constants", "DISPATCH", root)
+	out, err := constantsReviewer(buildCommitReviewPrompt(constantsRubric, change.String()), MediumBalanced.model(), root)
+	if err != nil {
+		logAsync("constants", "ERROR: "+err.Error(), root)
+		return ""
+	}
+	verdict, feedback := parseVerdict(out)
+	logAsync("constants", verdict, root)
+	if verdict != "REVISE" {
+		return ""
+	}
+	return feedback
+}
+
+func buildCommitReviewPrompt(rubric, change string) string {
+	return fmt.Sprintf(`%s
+
+OUTPUT PROTOCOL
+If the change below is fine by the rubric above, respond with exactly:
+PASS
+
+Otherwise respond with:
+REVISE
+- <one short bullet per issue: file, what is wrong -> what to do>
+(nothing after the list)
+
+--- BEGIN CHANGE (git diff, then any new files) ---
+%s
+--- END CHANGE ---
+`, rubric, change)
+}
+
+const constantsRubric = `You are reviewing a commit to a Go codebase, given as a git diff. Judge ONLY how the change uses constants: where they are declared, and whether each value should or should not be a named constant. Ignore everything else, and judge only the added or changed lines.
+
+You are running in the root of the repository, and you can use Read, Grep and Glob. Use them only to answer what the diff can't, such as how many places use a constant, or whether other services use a constant in proto/constants.go. This is a fast review, not an in-depth one: do a few quick searches at most, then answer.
 
 WHERE A CONSTANT GOES
 
 - Declare a constant in proto/constants.go only if it is visible outside the service: other services use it, or are meant to use it (for example, a value that is part of the service's API). Otherwise, declare it at the top of the file that uses it.
-- You can see only this change, not the rest of the codebase. Flag a constant in proto/constants.go only when nothing suggests outside use — for example, a name that clearly describes an internal detail such as a retry count or a page size.
 
 A VALUE SHOULD BE A NAMED CONSTANT WHEN
 
@@ -49,4 +105,4 @@ So flag:
 - an unexplained literal (a number whose meaning is not clear from the code around it) -> give it a named constant;
 - a constant in proto/constants.go that only this service uses -> move it to the top of the file that uses it.
 
-Only flag what is clear from the change itself. If you are not sure, answer PASS.`
+If you are not sure, answer PASS.`
