@@ -94,6 +94,19 @@ In order:
    - A value should not be a constant when it is already clear
      (`3 * time.Minute` does not need `ThreeMinutes`). If it has a role, name the
      role: `CreateHandlerTimeout = 3 * time.Minute`.
+4. **Idempotency review — advice only.** It runs at the same time as the
+   constants review, when the change adds or changes an RPC handler signature or
+   a file in a `handler/` folder. A headless Claude with the same read-only
+   access follows each changed handler from start to end. At each side effect,
+   it asks what a retry with the same request does if the handler stops at that
+   point. It speaks only when it is confident. It flags:
+   - money that moves twice, or a customer who gets the same alert twice;
+   - a duplicate record, or an idempotency key that changes between attempts;
+   - a "done" state saved before the side effect, a state that a retry rejects
+     so the request can never complete, and two attempts that race.
+
+   An event that is published again, or the same row that is written again, is
+   safe, so it does not flag them. Test files are not sent to it.
 
 `git commit --no-verify` skips all of this. The block message tells the agent to
 ask me first.
@@ -179,7 +192,8 @@ background reviewer must be its own entry, because `asyncRewake` is set per hook
 
 - **A semgrep rule:** add it to the YAML in `internal/hook/handler_semgrep_rules.go`.
 - **A reviewer rule:** edit the `rubric` text in that reviewer's file, for
-  example `handler_valuable_comments.go`.
+  example `handler_valuable_comments.go`. The commit-time reviewers keep theirs
+  in `handler_constants.go` and `handler_idempotency.go`.
 - **A new guard:** add `internal/hook/handler_<name>.go` and register it:
 
   ```go

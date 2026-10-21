@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 func init() {
@@ -96,10 +97,19 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	if curlNote != "" {
 		notes = append(notes, curlNote)
 	}
-	// The review is slow, so run it last.
-	if feedback := reviewConstants(root); feedback != "" {
+	// The reviews are slow, so run them last.
+	var constantsFeedback, idempotencyFeedback string
+	var reviews sync.WaitGroup
+	reviews.Go(func() { constantsFeedback = reviewConstants(root) })
+	reviews.Go(func() { idempotencyFeedback = reviewIdempotency(root) })
+	reviews.Wait()
+	if constantsFeedback != "" {
 		notes = append(notes, "The constants review suggests these changes. The commit still runs, "+
-			"so decide which are worth a follow-up commit:\n"+feedback)
+			"so decide which are worth a follow-up commit:\n"+constantsFeedback)
+	}
+	if idempotencyFeedback != "" {
+		notes = append(notes, "The idempotency review found these retry risks in the RPC handlers. The commit "+
+			"still runs, so check each one, and fix the real ones in a follow-up commit:\n"+idempotencyFeedback)
 	}
 	if len(notes) == 0 {
 		return nil, nil

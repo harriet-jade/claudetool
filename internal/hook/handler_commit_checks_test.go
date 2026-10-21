@@ -94,7 +94,7 @@ func TestCommitChecksAllowsPassingTest(t *testing.T) {
 	// GIVEN - A git repo with a changed package whose test passes...
 	root := newGoRepo(t, "if 1+1 != 2 { t.Fatal(\"maths is broken\") }")
 	// ...and a constants review that passes.
-	stubConstantsReviewer(t, "PASS")
+	stubCommitReviewer(t, &constantsReviewer, "PASS")
 
 	// WHEN - Claude tries to commit.
 	code, stderr := runCommitChecks(t, root, `git commit -m "change"`)

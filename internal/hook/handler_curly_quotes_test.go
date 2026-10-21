@@ -79,7 +79,7 @@ func TestCommitChecksCurlsAndRestagesStagedFile(t *testing.T) {
 		t.Fatalf("git add: %v\n%s", err, out)
 	}
 	// ...and a constants review that passes.
-	stubConstantsReviewer(t, "PASS")
+	stubCommitReviewer(t, &constantsReviewer, "PASS")
 
 	// WHEN - Claude tries to commit.
 	toolInput, _ := json.Marshal(BashInput{Command: `git commit -m "change"`})

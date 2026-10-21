@@ -21,18 +21,27 @@ func mayNeedConstantReview(text string) bool {
 
 // reviewConstants returns what to fix in how the uncommitted Go changes in root use constants, or "" if nothing, or if the review can't run.
 func reviewConstants(root string) string {
-	// Ignore the error: a repo with no commits has no HEAD, and all its files are untracked.
-	diff, _ := gitOutput(root, "diff", "HEAD", "--", "*.go")
-	untracked, err := gitOutput(root, "ls-files", "--others", "--exclude-standard", "--", "*.go")
-	if err != nil {
+	change, added, ok := uncommittedChange(root, "*.go")
+	if !ok || !mayNeedConstantReview(added) {
 		return ""
 	}
+	return runCommitReview("constants", constantsReviewer, constantsRubric, change, root)
+}
 
-	var change, added strings.Builder
-	change.WriteString(diff)
+// uncommittedChange returns the git diff of the files in root that match pathspecs, then each new file in full.
+func uncommittedChange(root string, pathspecs ...string) (change, added string, ok bool) {
+	// Ignore the error: a repo with no commits has no HEAD, and all its files are untracked.
+	diff, _ := gitOutput(root, append([]string{"diff", "HEAD", "--"}, pathspecs...)...)
+	untracked, err := gitOutput(root, append([]string{"ls-files", "--others", "--exclude-standard", "--"}, pathspecs...)...)
+	if err != nil {
+		return "", "", false
+	}
+
+	var changeText, addedText strings.Builder
+	changeText.WriteString(diff)
 	for _, line := range strings.Split(diff, "\n") {
 		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			added.WriteString(line + "\n")
+			addedText.WriteString(line + "\n")
 		}
 	}
 	for _, path := range strings.Fields(untracked) {
@@ -40,21 +49,22 @@ func reviewConstants(root string) string {
 		if err != nil {
 			continue
 		}
-		fmt.Fprintf(&change, "\nNEW FILE %s\n%s\n", path, content)
-		added.Write(content)
+		fmt.Fprintf(&changeText, "\nNEW FILE %s\n%s\n", path, content)
+		addedText.Write(content)
 	}
-	if !mayNeedConstantReview(added.String()) {
-		return ""
-	}
+	return changeText.String(), addedText.String(), true
+}
 
-	logAsync("constants", "DISPATCH", root)
-	out, err := constantsReviewer(buildCommitReviewPrompt(constantsRubric, change.String()), MediumBalanced.model(), root)
+// runCommitReview returns the reviewer's REVISE feedback, or "" otherwise.
+func runCommitReview(name string, reviewer func(prompt, model, dir string) (string, error), rubric, change, root string) string {
+	logAsync(name, "DISPATCH", root)
+	out, err := reviewer(buildCommitReviewPrompt(rubric, change), MediumBalanced.model(), root)
 	if err != nil {
-		logAsync("constants", "ERROR: "+err.Error(), root)
+		logAsync(name, "ERROR: "+err.Error(), root)
 		return ""
 	}
 	verdict, feedback := parseVerdict(out)
-	logAsync("constants", verdict, root)
+	logAsync(name, verdict, root)
 	if verdict != "REVISE" {
 		return ""
 	}

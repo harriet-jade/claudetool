@@ -38,7 +38,7 @@ func TestCommitChecksPassesOnConstantsAdvice(t *testing.T) {
 	root := newGoRepo(t, "if ThreeMinutes == 0 { t.Fatal(\"wrong\") }")
 	writeRepoFile(t, root, "calc/calc.go", "package calc\n\nimport \"time\"\n\nconst ThreeMinutes = 3 * time.Minute\n")
 	// ...and a constants reviewer that asks for a change.
-	prompt := stubConstantsReviewer(t, "REVISE\n- calc/calc.go: ThreeMinutes only repeats its value -> inline it")
+	prompt := stubCommitReviewer(t, &constantsReviewer, "REVISE\n- calc/calc.go: ThreeMinutes only repeats its value -> inline it")
 
 	// WHEN - Claude tries to commit.
 	toolInput, _ := json.Marshal(BashInput{Command: `git commit -m "change"`})
@@ -59,16 +59,16 @@ func TestCommitChecksPassesOnConstantsAdvice(t *testing.T) {
 	}
 }
 
-// stubConstantsReviewer makes the constants review answer verdict without starting claude.
-func stubConstantsReviewer(t *testing.T, verdict string) *string {
+// stubCommitReviewer makes a commit-time review answer verdict without starting claude, and returns the prompt it gets.
+func stubCommitReviewer(t *testing.T, reviewer *func(prompt, model, dir string) (string, error), verdict string) *string {
 	t.Helper()
 	prompt := new(string)
-	original, originalLog := constantsReviewer, asyncLogOverride
-	constantsReviewer = func(p, model, dir string) (string, error) {
+	original, originalLog := *reviewer, asyncLogOverride
+	*reviewer = func(p, model, dir string) (string, error) {
 		*prompt = p
 		return verdict, nil
 	}
 	asyncLogOverride = filepath.Join(t.TempDir(), "async.log")
-	t.Cleanup(func() { constantsReviewer, asyncLogOverride = original, originalLog })
+	t.Cleanup(func() { *reviewer, asyncLogOverride = original, originalLog })
 	return prompt
 }
