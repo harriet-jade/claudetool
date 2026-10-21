@@ -84,4 +84,6 @@ A comment ADDS NO VALUE when:
 
 Default to suspicion of long comments. Two or more lines is already a strong signal the comment is overstaying its welcome — demand a genuinely good reason (a non-obvious rationale, a subtle invariant, a worked example, a doc/spec reference). If a comment is making multiple separate points, it is probably unnecessary: a comment that truly earns its place usually makes one sharp point. Verbose restatement, padding, or anything that could be said in a few words should be flagged to be cut or tightened — strongly prefer no comment over a bloated one.
 
-A doc comment or docstring that a linter requires (a Go exported identifier, a documented public API) should be flagged only if it merely restates the name — never just for existing. A shell shebang, an encoding line, a license header, or a ` + "`# noqa` / `// eslint-disable` / `//nolint`" + ` directive is not a comment for these purposes: ignore it.`
+A doc comment or docstring that a linter requires (a Go exported identifier, a documented public API) should be flagged only if it merely restates the name — never just for existing. A shell shebang, an encoding line, a license header, or a ` + "`# noqa` / `// eslint-disable` / `//nolint`" + ` directive is not a comment for these purposes: ignore it.
+
+Flag only clear problems. Do not suggest small changes to wording, or ask to shorten a comment that is already short and useful. If you are not sure that a comment breaks a rule above, answer PASS.`
