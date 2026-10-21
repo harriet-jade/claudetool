@@ -101,7 +101,8 @@ ask me first.
 ### 3. After each edit
 
 **`semgrep`** — runs on each `.go` file the agent writes or edits, and reports
-findings to the agent at once:
+findings to the agent at once. For an edit, it reports only the findings on the
+lines that the edit changed. For a Write, it reports all findings in the file:
 
 | Rule | Asks for |
 |---|---|
@@ -195,7 +196,24 @@ background reviewer must be its own entry, because `asyncRewake` is set per hook
   cheap `precheck`, and a `rubric`) and register its `handler()`. See
   `handler_rpcwrapper.go`.
 
-Then test, install, and add the handler to `~/.claude/settings.json`.
+Then do all the steps in [Finishing a change](#finishing-a-change).
+
+## Finishing a change
+
+A change is not complete until you do all of these steps. Do them in this
+order. Do not stop after a step to ask if you must continue.
+
+1. **Test:** run `go test ./...`. If a test fails because of your change, fix
+   it. If a failure was there before your change, tell me the test and the
+   cause.
+2. **Document:** if the change alters what a handler does, update this README.
+3. **Install:** run `go install .`. Hooks use the new binary at once.
+4. **Add the hook:** if you added a handler, add it to `~/.claude/settings.json`.
+5. **Commit:** commit to `master`. Commit only the files that your change
+   touched. If there are other uncommitted changes, do not commit them, and tell
+   me about them.
+6. **Push:** run `git push origin master`. `origin` is my fork. Never push to
+   `upstream`.
 
 ## Handlers I don't use
 

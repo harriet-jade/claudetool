@@ -23,6 +23,14 @@ const semgrepRules = `rules:
       - metavariable-regex:
           metavariable: $LOG
           regex: ^(slog|log|fmt)$
+      # Without this, calls inside a return also match.
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^((Trace|Debug|Info|Warn|Error|Critical)(Context)?|Print(f|ln)?)$
+      - pattern-not: |
+          if err != nil {
+              return ...
+          }
       - pattern-not-regex: "//.*\n"
     languages: [go]
     severity: WARNING
@@ -118,7 +126,7 @@ const semgrepRules = `rules:
       - metavariable-regex:
           metavariable: $FUNC
           regex: ^(Trace|Debug|Info|Warn|Error|Critical)$
-    message: Don't pass slog.Params(ctx) into slog logging calls — ctx params are included automatically. Only pass slog.Params(ctx) to terrors (e.g. terrors.Augment).
+    message: Don’t pass slog.Params(ctx) into slog logging calls — ctx params are included automatically. Only pass slog.Params(ctx) to terrors (e.g. terrors.Augment).
     languages: [go]
     severity: ERROR
 
@@ -166,7 +174,7 @@ const semgrepRules = `rules:
   - id: terror-test-matching
     patterns:
       - pattern: $PKG.$FUNC($T, terrors.Is(...), ...)
-    message: You're better off using test.AssertTerrorMatches; test failures will show you the expected and actual values, rather than just failing.
+    message: You’re better off using test.AssertTerrorMatches; test failures will show you the expected and actual values, rather than just failing.
     languages: [go]
     severity: ERROR
     paths:
