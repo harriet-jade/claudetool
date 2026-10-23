@@ -137,7 +137,7 @@ whole file for a Write). They wake the agent only when they find a problem:
 
 | Reviewer | Flags |
 |---|---|
-| `valuable-comments` | comments that restate the code or the name, describe how instead of why, narrate the change, are not in simple English (ASD-STE100 style), or tests without GIVEN/WHEN/THEN phase comments. Only clear problems. |
+| `valuable-comments` | comments that restate the code or the name, describe how instead of why, narrate the change, are not in simple English (ASD-STE100 style), or tests without GIVEN/WHEN/THEN phase comments. Only clear problems. Length is not a problem: a long comment that gives rationale is kept. |
 | `change-detector-tests` | tests that mirror the implementation instead of checking behaviour |
 | `rpc-wrapper` | functions that only wrap one RPC call — inline them |
 

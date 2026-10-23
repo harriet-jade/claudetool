@@ -79,11 +79,11 @@ A comment ADDS NO VALUE when:
 - (Go tests) A test, either a unit test or an acceptance test, does not mark its phases with GIVEN/WHEN/THEN comments. Each phase starts with "// GIVEN - ...", "// WHEN - ..." or "// THEN - ...". Extra lines in the same phase start with "// ...and" or "// ...but", so the comments read as one sentence from top to bottom. For example:
     // GIVEN - A Spanish user whose personal account has no balance of its own...
     // ...but which holds two regular pots funded with 5000 each.
-    // WHEN - TGSS orders a 10000 seizure against the user's NIF...
+    // WHEN - TGSS orders a 10000 seizure against the user’s NIF...
     // THEN - The whole 10000 is reported as withheld against the personal account IBAN.
 
-Default to suspicion of long comments. Two or more lines is already a strong signal the comment is overstaying its welcome — demand a genuinely good reason (a non-obvious rationale, a subtle invariant, a worked example, a doc/spec reference). If a comment is making multiple separate points, it is probably unnecessary: a comment that truly earns its place usually makes one sharp point. Verbose restatement, padding, or anything that could be said in a few words should be flagged to be cut or tightened — strongly prefer no comment over a bloated one.
+Do not flag a comment because it is long, or because it makes more than one point. A long comment is good when it gives the reader rationale they need: why the code is this way, the trade-offs, the constraints, the gotchas, or a worked example. Judge each sentence against the rules above, not the length of the whole comment. If a long comment holds useful rationale and also some sentences that restate the code or are filler, flag only those sentences, and say to keep the rest.
 
 A doc comment or docstring that a linter requires (a Go exported identifier, a documented public API) should be flagged only if it merely restates the name — never just for existing. A shell shebang, an encoding line, a license header, or a ` + "`# noqa` / `// eslint-disable` / `//nolint`" + ` directive is not a comment for these purposes: ignore it.
 
-Flag only clear problems. Do not suggest small changes to wording, or ask to shorten a comment that is already short and useful. If you are not sure that a comment breaks a rule above, answer PASS.`
+Flag only clear problems. Do not suggest small changes to wording, or ask to shorten a useful comment. If you are not sure that a comment breaks a rule above, answer PASS.`
