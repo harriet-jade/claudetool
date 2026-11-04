@@ -25,7 +25,7 @@ func reviewConstants(root string) string {
 	if !ok || !mayNeedConstantReview(added) {
 		return ""
 	}
-	return runCommitReview("constants", constantsReviewer, constantsRubric, change, root)
+	return runCommitReview("constants", constantsReviewer, buildCommitReviewPrompt(constantsRubric, change), root)
 }
 
 // uncommittedChange returns the git diff of the files in root that match pathspecs, then each new file in full.
@@ -56,9 +56,9 @@ func uncommittedChange(root string, pathspecs ...string) (change, added string, 
 }
 
 // runCommitReview returns the reviewer's REVISE feedback, or "" otherwise.
-func runCommitReview(name string, reviewer func(prompt, model, dir string) (string, error), rubric, change, root string) string {
+func runCommitReview(name string, reviewer func(prompt, model, dir string) (string, error), prompt, root string) string {
 	logAsync(name, "DISPATCH", root)
-	out, err := reviewer(buildCommitReviewPrompt(rubric, change), MediumBalanced.model(), root)
+	out, err := reviewer(prompt, MediumBalanced.model(), root)
 	if err != nil {
 		logAsync(name, "ERROR: "+err.Error(), root)
 		return ""

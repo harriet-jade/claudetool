@@ -64,9 +64,10 @@ These block a command and tell the agent the better form.
 ### 2. Before `git commit` — `commit-checks`
 
 Runs when a Bash command contains `git commit` without `--no-verify`. It follows
-a `cd` earlier in the same command. It works on every changed Go file in the
-repo (staged, unstaged and new), because in `git add x && git commit` the hook
-runs before the `add`.
+a `cd` earlier in the same command. It works on every changed file in the repo
+(staged, unstaged and new), because in `git add x && git commit` the hook runs
+before the `add`. Steps 1 to 4 run only when Go files changed. Step 5 runs on
+every commit.
 
 In order:
 
@@ -107,6 +108,19 @@ In order:
 
    An event that is published again, or the same row that is written again, is
    safe, so it does not flag them. Test files are not sent to it.
+5. **Comments review — advice only.** It runs at the same time as the other
+   reviews, when the change adds a comment in a `.proto`, Go, JS, TS, Python,
+   shell or SQL file. Generated `*.pb.go` files are skipped. A headless Claude
+   with the same read-only access looks only at the comments that the change
+   adds or changes. Comments that were there before are out of scope. For each
+   comment, it finds a principle whose conditions definitely apply. Most
+   comments match no principle, and it ignores them. It reports a comment only
+   when the comment does not obey the rule of its principle. Each report gives
+   the comment, the principle, the problem and the fix. The principles:
+   - **RPC comments** — a comment above an `rpc` in a `.proto` file tells the
+     caller how to use the RPC and what they must know. It does not describe
+     how the RPC works inside, unless the caller must know it. It can be
+     several lines long, if each line has a purpose.
 
 `git commit --no-verify` skips all of this. The block message tells the agent to
 ask me first.
@@ -137,7 +151,6 @@ whole file for a Write). They wake the agent only when they find a problem:
 
 | Reviewer | Flags |
 |---|---|
-| `valuable-comments` | comments that restate the code or the name, describe how instead of why, narrate the change, are not in simple English (ASD-STE100 style), or tests without GIVEN/WHEN/THEN phase comments. Only clear problems. Length is not a problem: a long comment that gives rationale is kept. |
 | `change-detector-tests` | tests that mirror the implementation instead of checking behaviour |
 | `rpc-wrapper` | functions that only wrap one RPC call — inline them |
 
@@ -164,7 +177,6 @@ The claudetool entries in `~/.claude/settings.json`:
     "PostToolUse": [
       {"matcher": "Write|Edit|MultiEdit", "hooks": [
         {"type": "command", "command": "/Users/hturner/bin/claudetool hook semgrep"},
-        {"type": "command", "command": "/Users/hturner/bin/claudetool hook valuable-comments", "asyncRewake": true},
         {"type": "command", "command": "/Users/hturner/bin/claudetool hook change-detector-tests", "asyncRewake": true},
         {"type": "command", "command": "/Users/hturner/bin/claudetool hook rpc-wrapper", "asyncRewake": true}
       ]},
@@ -192,8 +204,11 @@ background reviewer must be its own entry, because `asyncRewake` is set per hook
 
 - **A semgrep rule:** add it to the YAML in `internal/hook/handler_semgrep_rules.go`.
 - **A reviewer rule:** edit the `rubric` text in that reviewer's file, for
-  example `handler_valuable_comments.go`. The commit-time reviewers keep theirs
-  in `handler_constants.go` and `handler_idempotency.go`.
+  example `handler_rpcwrapper.go`. The commit-time reviewers keep theirs in
+  `handler_constants.go`, `handler_idempotency.go` and `handler_comments.go`.
+- **A comment principle:** add a section under `PRINCIPLES` in
+  `handler_comments.go`. Give it a title, an "Applies when:" line that says when
+  it fires, a "Rule:" line that says what the comment must do, and examples.
 - **A new guard:** add `internal/hook/handler_<name>.go` and register it:
 
   ```go

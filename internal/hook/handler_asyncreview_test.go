@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -29,11 +30,53 @@ func withAsyncLog(t *testing.T) func() string {
 
 func asyncReviewWith(review func(prompt, model string) (string, error)) asyncReview {
 	return asyncReview{
-		name:    "valuable-comments",
+		name:    "rpc-wrapper",
 		tier:    MediumBalanced,
 		rubric:  "rubric",
 		summary: "summary:",
 		review:  review,
+	}
+}
+
+// invoke runs a handler against a single Write/Edit tool input.
+func invoke(t *testing.T, a asyncReview, tool string, toolInput any, args ...string) (*Output, error) {
+	t.Helper()
+	ti, _ := json.Marshal(toolInput)
+	return a.handler()(&Input{
+		HookEventName: "PostToolUse",
+		ToolName:      tool,
+		ToolInput:     ti,
+		Args:          args,
+	})
+}
+
+func TestReviewTierResolution(t *testing.T) {
+	withAsyncLog(t)
+	// GIVEN - The -tier flags of a hook command, and the model that each one picks.
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{nil, "sonnet"},
+		{[]string{"-tier", "fast"}, "haiku"},
+		{[]string{"-tier=slow"}, "opus"},
+		{[]string{"--tier", "medium"}, "sonnet"},
+		{[]string{"-tier", "bogus"}, "sonnet"},
+	}
+	for _, c := range cases {
+		var model string
+		a := asyncReviewWith(func(prompt, m string) (string, error) {
+			model = m
+			return "PASS", nil
+		})
+
+		// WHEN - The reviewer runs with the flags.
+		_, _ = invoke(t, a, "Edit", EditInput{FilePath: "/src/x.go", NewString: "x()"}, c.args...)
+
+		// THEN - It uses the model of that tier, or the default for an unknown tier.
+		if model != c.want {
+			t.Errorf("args %v: model = %q, want %q", c.args, model, c.want)
+		}
 	}
 }
 

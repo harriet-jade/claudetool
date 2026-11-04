@@ -104,7 +104,7 @@ func tierFromArgs(args []string, def ReviewTier) ReviewTier {
 // the background without blocking the working agent, and only wakes it (via
 // exit 2 + stderr) when the reviewer returns findings.
 type asyncReview struct {
-	name         string                 // handler name, e.g. "valuable-comments"
+	name         string                 // handler name, e.g. "rpc-wrapper"
 	fileSuffixes []string               // required file suffixes, any one matches (nil = any file)
 	skipSuffix   string                 // optional suffix to skip, e.g. "_test.go" ("" = none)
 	tier         ReviewTier             // default model tier

@@ -26,7 +26,7 @@ func reviewIdempotency(root string) string {
 	if !ok || !mayTouchRPCHandler(change) {
 		return ""
 	}
-	return runCommitReview("idempotency", idempotencyReviewer, idempotencyRubric, change, root)
+	return runCommitReview("idempotency", idempotencyReviewer, buildCommitReviewPrompt(idempotencyRubric, change), root)
 }
 
 const idempotencyRubric = `You are reviewing a commit to Monzo’s Go monorepo, given as a git diff. Judge ONLY whether the RPC handlers that the change adds or changes are safe to retry (idempotent). Ignore everything else, such as style, naming, tests and performance.

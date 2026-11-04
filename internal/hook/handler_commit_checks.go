@@ -27,7 +27,8 @@ var gitOptionsWithValue = map[string]bool{
 
 // handleCommitChecks runs go test, staticcheck and svcchecker on the changed Go
 // packages before Claude runs `git commit`, and blocks the commit if any fail.
-// `git commit --no-verify` skips the checks.
+// Then it runs the reviews, which only give advice.
+// `git commit --no-verify` skips the checks and the reviews.
 //
 // Use as a PreToolUse hook with matcher "Bash".
 func handleCommitChecks(in *Input) (*Output, error) {
@@ -56,11 +57,56 @@ func handleCommitChecks(in *Input) (*Output, error) {
 		return nil, nil
 	}
 	entries := parseStatus(status)
-	packages, services := changedGoPackages(root, entries)
-	if len(packages) == 0 {
+	if len(entries) == 0 {
 		return nil, nil
 	}
+	packages, services := changedGoPackages(root, entries)
+	hasGo := len(packages) > 0
 
+	var notes []string
+	if hasGo {
+		curlNote, err := runGoChecks(root, entries, packages, services)
+		if err != nil {
+			return nil, err
+		}
+		if curlNote != "" {
+			notes = append(notes, curlNote)
+		}
+	}
+
+	// The reviews are slow, so run them last.
+	var constantsFeedback, idempotencyFeedback, commentsFeedback string
+	var reviews sync.WaitGroup
+	if hasGo {
+		reviews.Go(func() { constantsFeedback = reviewConstants(root) })
+		reviews.Go(func() { idempotencyFeedback = reviewIdempotency(root) })
+	}
+	reviews.Go(func() { commentsFeedback = reviewComments(root) })
+	reviews.Wait()
+	if constantsFeedback != "" {
+		notes = append(notes, "The constants review suggests these changes. The commit still runs, "+
+			"so decide which are worth a follow-up commit:\n"+constantsFeedback)
+	}
+	if idempotencyFeedback != "" {
+		notes = append(notes, "The idempotency review found these retry risks in the RPC handlers. The commit "+
+			"still runs, so check each one, and fix the real ones in a follow-up commit:\n"+idempotencyFeedback)
+	}
+	if commentsFeedback != "" {
+		notes = append(notes, "The comments review found comments that do not obey a comment principle. The "+
+			"commit still runs, so fix them in a follow-up commit:\n"+commentsFeedback)
+	}
+	if len(notes) == 0 {
+		return nil, nil
+	}
+	return &Output{HookSpecificOutput: &HookSpecificOutput{
+		HookEventName:     "PreToolUse",
+		AdditionalContext: strings.Join(notes, "\n\n"),
+	}}, nil
+}
+
+// runGoChecks curls the apostrophes in the changed Go files, then runs the checks on the changed packages. It returns
+// a note about the curled lines, and an error that blocks the commit if a check fails.
+func runGoChecks(root string, entries []statusEntry, packages, services []string) (string, error) {
 	// The tests must see the curly quotes, because those are the strings that get committed.
 	curlNote := curlChangedFiles(root, entries)
 
@@ -86,38 +132,13 @@ func handleCommitChecks(in *Input) (*Output, error) {
 		failures = append(failures, fmt.Sprintf("$ %s\n%s", strings.Join(check, " "), lastLines(string(out), maxCheckOutputLines)))
 	}
 	if len(failures) > 0 {
-		return nil, fmt.Errorf(
+		return "", fmt.Errorf(
 			"blocked: commit checks failed, so the commit did not run. Fix the problems below, "+
 				"then commit again. If a failure was already there before your change, tell the "+
 				"user, and commit with `git commit --no-verify` only if they agree.\n\n%s%s",
 			strings.Join(failures, "\n\n"), withNote(curlNote))
 	}
-
-	var notes []string
-	if curlNote != "" {
-		notes = append(notes, curlNote)
-	}
-	// The reviews are slow, so run them last.
-	var constantsFeedback, idempotencyFeedback string
-	var reviews sync.WaitGroup
-	reviews.Go(func() { constantsFeedback = reviewConstants(root) })
-	reviews.Go(func() { idempotencyFeedback = reviewIdempotency(root) })
-	reviews.Wait()
-	if constantsFeedback != "" {
-		notes = append(notes, "The constants review suggests these changes. The commit still runs, "+
-			"so decide which are worth a follow-up commit:\n"+constantsFeedback)
-	}
-	if idempotencyFeedback != "" {
-		notes = append(notes, "The idempotency review found these retry risks in the RPC handlers. The commit "+
-			"still runs, so check each one, and fix the real ones in a follow-up commit:\n"+idempotencyFeedback)
-	}
-	if len(notes) == 0 {
-		return nil, nil
-	}
-	return &Output{HookSpecificOutput: &HookSpecificOutput{
-		HookEventName:     "PreToolUse",
-		AdditionalContext: strings.Join(notes, "\n\n"),
-	}}, nil
+	return curlNote, nil
 }
 
 func withNote(note string) string {
