@@ -67,6 +67,27 @@ func TestCommitChecksPassesOnCommentsAdvice(t *testing.T) {
 	}
 }
 
+func TestCommentsReviewSendsAccessorPrinciple(t *testing.T) {
+	// GIVEN - A git repo with a new Go file that has a doc comment on a short accessor method.
+	root := newEmptyRepo(t)
+	writeRepoFile(t, root, "order.go", `package order
+
+// SignaturesOverridden reports whether an engineer accepted the order’s signatures although they failed validation.
+func (o *Order) SignaturesOverridden() bool {
+	return !o.SignatureOverriddenAt.IsZero()
+}
+`)
+	prompt := stubCommitReviewer(t, &commentsReviewer, "PASS")
+
+	// WHEN - The comments review runs.
+	reviewComments(root)
+
+	// THEN - The reviewer is given the accessor principle.
+	if !strings.Contains(*prompt, "### No doc comments on short accessor methods") {
+		t.Errorf("prompt does not contain the accessor principle:\n%s", *prompt)
+	}
+}
+
 func TestCommitChecksSkipsCommentsReviewWithoutNewComments(t *testing.T) {
 	// GIVEN - A git repo with a committed proto file that has a comment...
 	root := newEmptyRepo(t)

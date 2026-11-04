@@ -121,6 +121,9 @@ In order:
      caller how to use the RPC and what they must know. It does not describe
      how the RPC works inside, unless the caller must know it. It can be
      several lines long, if each line has a purpose.
+   - **No doc comments on short accessor methods** — a method whose body is
+     one statement or a short guard, and whose name already says what it
+     returns, has no doc comment. If the name is not clear, rename the method.
 
 `git commit --no-verify` skips all of this. The block message tells the agent to
 ask me first.

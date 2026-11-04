@@ -117,4 +117,25 @@ Example of a bad comment, on the same RPC:
     // ProcessInformationRequest calls downloadFile, then for each row it calls resolveDebtor and
     // writes the result to the information_requests table in batches of 50.
 
-This comment is bad. It describes how the handler works inside (function names, a table, a batch size), and the caller does not need to know these things. It also does not tell the caller about the dry run, commit=true or allow_resend=true. Fix: describe what the RPC does for the caller, and the request fields that change its behaviour.`
+This comment is bad. It describes how the handler works inside (function names, a table, a batch size), and the caller does not need to know these things. It also does not tell the caller about the dry run, commit=true or allow_resend=true. Fix: describe what the RPC does for the caller, and the request fields that change its behaviour.
+
+### No doc comments on short accessor methods
+
+Applies when: the comment is a doc comment on a method whose body is one statement or a short guard, and the method name already says what it returns.
+
+Rule: Do not add a doc comment. Make the name clear instead.
+
+Example of good code, with no comment:
+
+    func (o *Order) SignaturesOverridden() bool {
+        return !o.SignatureOverriddenAt.IsZero()
+    }
+
+Example of a bad comment:
+
+    // SignaturesOverridden reports whether an engineer accepted the order’s signatures although they failed validation.
+    func (o *Order) SignaturesOverridden() bool {
+        return !o.SignatureOverriddenAt.IsZero()
+    }
+
+This comment is bad. It says again what the name and the one-line body already show. Fix: remove the comment. If the name does not make the meaning clear, rename the method.`
