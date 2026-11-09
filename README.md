@@ -66,8 +66,8 @@ These block a command and tell the agent the better form.
 Runs when a Bash command contains `git commit` without `--no-verify`. It follows
 a `cd` earlier in the same command. It works on every changed file in the repo
 (staged, unstaged and new), because in `git add x && git commit` the hook runs
-before the `add`. Steps 1 to 4 run only when Go files changed. Step 5 runs on
-every commit.
+before the `add`. Steps 1 to 4 run only when Go files changed. Steps 5 and 6
+run on every commit.
 
 In order:
 
@@ -124,6 +124,19 @@ In order:
    - **No doc comments on short accessor methods** — a method whose body is
      one statement or a short guard, and whose name already says what it
      returns, has no doc comment. If the name is not clear, rename the method.
+6. **Writing review — advice only.** It runs at the same time as the other
+   reviews, when the change adds text to a document (`.md`, `.mdx`,
+   `.markdown`, `.rst`) or adds a comment in a file that the comments review
+   reads. Vendored documents are skipped. A headless Claude with no tools
+   checks the new text against the guidelines in
+   [Write like Monzo](https://www.notion.so/monzo/WriteLikeMonzo-32969fe426d28073bce0dc6edfb0e5b9),
+   with only the parts that apply to writing for staff. It reads comments,
+   READMEs, runbooks and other documents. It does not read text for customers,
+   error messages, code, or the commit message. It reports a text only when it
+   is a very clear violation, and the default is no feedback. It gives one
+   answer for the whole commit, by file, with the text, the guideline, the
+   problem and a new text. It does not report missing contractions, because my
+   writing rules do not use them.
 
 `git commit --no-verify` skips all of this. The block message tells the agent to
 ask me first.
@@ -208,7 +221,8 @@ background reviewer must be its own entry, because `asyncRewake` is set per hook
 - **A semgrep rule:** add it to the YAML in `internal/hook/handler_semgrep_rules.go`.
 - **A reviewer rule:** edit the `rubric` text in that reviewer's file, for
   example `handler_rpcwrapper.go`. The commit-time reviewers keep theirs in
-  `handler_constants.go`, `handler_idempotency.go` and `handler_comments.go`.
+  `handler_constants.go`, `handler_idempotency.go`, `handler_comments.go` and
+  `handler_writing.go`.
 - **A comment principle:** add a section under `PRINCIPLES` in
   `handler_comments.go`. Give it a title, an "Applies when:" line that says when
   it fires, a "Rule:" line that says what the comment must do, and examples.

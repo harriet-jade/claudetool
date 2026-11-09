@@ -27,7 +27,8 @@ var gitOptionsWithValue = map[string]bool{
 
 // handleCommitChecks runs go test, staticcheck and svcchecker on the changed Go
 // packages before Claude runs `git commit`, and blocks the commit if any fail.
-// Then it runs the reviews, which only give advice.
+// Then it runs the reviews, which only give advice. The comments and writing reviews run on every commit, also with
+// no Go changes.
 // `git commit --no-verify` skips the checks and the reviews.
 //
 // Use as a PreToolUse hook with matcher "Bash".
@@ -75,13 +76,14 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	}
 
 	// The reviews are slow, so run them last.
-	var constantsFeedback, idempotencyFeedback, commentsFeedback string
+	var constantsFeedback, idempotencyFeedback, commentsFeedback, writingFeedback string
 	var reviews sync.WaitGroup
 	if hasGo {
 		reviews.Go(func() { constantsFeedback = reviewConstants(root) })
 		reviews.Go(func() { idempotencyFeedback = reviewIdempotency(root) })
 	}
 	reviews.Go(func() { commentsFeedback = reviewComments(root) })
+	reviews.Go(func() { writingFeedback = reviewWriting(root) })
 	reviews.Wait()
 	if constantsFeedback != "" {
 		notes = append(notes, "The constants review suggests these changes. The commit still runs, "+
@@ -94,6 +96,11 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	if commentsFeedback != "" {
 		notes = append(notes, "The comments review found comments that do not obey a comment principle. The "+
 			"commit still runs, so fix them in a follow-up commit:\n"+commentsFeedback)
+	}
+	if writingFeedback != "" {
+		notes = append(notes, "The writing review found text in the comments and documents that is hard to read, "+
+			"by the Monzo writing guidelines. The commit still runs, so decide which changes are worth a "+
+			"follow-up commit:\n"+writingFeedback)
 	}
 	if len(notes) == 0 {
 		return nil, nil

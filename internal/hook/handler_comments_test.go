@@ -47,6 +47,7 @@ func TestCommitChecksPassesOnCommentsAdvice(t *testing.T) {
 	writeRepoFile(t, root, "seizures.proto", rpcProto)
 	// ...and a comments review that finds a problem.
 	prompt := stubCommitReviewer(t, &commentsReviewer, "REVISE\n### seizures.proto: ProcessInformationRequest downloads\nPrinciple: RPC comments")
+	stubCommitReviewer(t, &writingReviewer, "PASS")
 
 	// WHEN - Claude tries to commit.
 	code, stdout, stderr := runCommitChecksWithOutput(t, root, `git commit -m "change"`)
