@@ -38,11 +38,31 @@ for them. They wake the agent only when they exit 2.
 
 ```sh
 go -C ~/src/github.com/harriet-jade/claudetool test ./...
-go -C ~/src/github.com/harriet-jade/claudetool install .
+go -C ~/src/github.com/harriet-jade/claudetool install . ./cmd/...
 ```
 
-The binary goes to `GOBIN` (`~/bin`). Hooks use the new binary at once, also in
+The binaries go to `GOBIN` (`~/bin`). Hooks use the new binary at once, also in
 running sessions.
+
+## Manual tools
+
+These are separate binaries in `cmd/`. No hook runs them. I run them myself.
+
+### `curly-apostrophes`
+
+```sh
+curly-apostrophes [--dry-run] FILE...
+```
+
+It changes straight apostrophes to `’` in the customer-facing strings of the
+Go files that you give it, and edits the files in place. In each string
+literal, a `'` with a letter on both sides becomes `’` (`don't` → `don’t`,
+`Monzo's` → `Monzo’s`). It changes all the strings in the file. It does not
+change comments, generated files, or messages passed to `slog`, `terrors`,
+`errors.New` or `fmt.Errorf`. It cannot know if a string is really for
+customers, so read the result before you commit it. `--dry-run` shows the lines
+that would change, and does not write the files. `curly-apostrophes --help`
+shows the full usage, the output format and the exit codes.
 
 ## Rules and enforcements
 
@@ -245,7 +265,7 @@ order. Do not stop after a step to ask if you must continue.
    it. If a failure was there before your change, tell me the test and the
    cause.
 2. **Document:** if the change alters what a handler does, update this README.
-3. **Install:** run `go install .`. Hooks use the new binary at once.
+3. **Install:** run `go install . ./cmd/...`. Hooks use the new binary at once.
 4. **Add the hook:** if you added a handler, add it to `~/.claude/settings.json`.
 5. **Commit:** commit to `master`. Commit only the files that your change
    touched. If there are other uncommitted changes, do not commit them, and tell
