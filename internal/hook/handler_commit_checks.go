@@ -64,14 +64,9 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	packages, services := changedGoPackages(root, entries)
 	hasGo := len(packages) > 0
 
-	var notes []string
 	if hasGo {
-		curlNote, err := runGoChecks(root, entries, packages, services)
-		if err != nil {
+		if err := runGoChecks(root, packages, services); err != nil {
 			return nil, err
-		}
-		if curlNote != "" {
-			notes = append(notes, curlNote)
 		}
 	}
 
@@ -85,6 +80,7 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	reviews.Go(func() { commentsFeedback = reviewComments(root) })
 	reviews.Go(func() { writingFeedback = reviewWriting(root) })
 	reviews.Wait()
+	var notes []string
 	if constantsFeedback != "" {
 		notes = append(notes, "The constants review suggests these changes. The commit still runs, "+
 			"so decide which are worth a follow-up commit:\n"+constantsFeedback)
@@ -111,12 +107,8 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	}}, nil
 }
 
-// runGoChecks curls the apostrophes in the changed Go files, then runs the checks on the changed packages. It returns
-// a note about the curled lines, and an error that blocks the commit if a check fails.
-func runGoChecks(root string, entries []statusEntry, packages, services []string) (string, error) {
-	// The tests must see the curly quotes, because those are the strings that get committed.
-	curlNote := curlChangedFiles(root, entries)
-
+// runGoChecks runs the checks on the changed packages. It returns an error that blocks the commit if a check fails.
+func runGoChecks(root string, packages, services []string) error {
 	checks := [][]string{
 		append([]string{"go", "test"}, packages...),
 		append([]string{"staticcheck", "-tags", "integration", "-tests"}, packages...),
@@ -139,20 +131,13 @@ func runGoChecks(root string, entries []statusEntry, packages, services []string
 		failures = append(failures, fmt.Sprintf("$ %s\n%s", strings.Join(check, " "), lastLines(string(out), maxCheckOutputLines)))
 	}
 	if len(failures) > 0 {
-		return "", fmt.Errorf(
+		return fmt.Errorf(
 			"blocked: commit checks failed, so the commit did not run. Fix the problems below, "+
 				"then commit again. If a failure was already there before your change, tell the "+
-				"user, and commit with `git commit --no-verify` only if they agree.\n\n%s%s",
-			strings.Join(failures, "\n\n"), withNote(curlNote))
+				"user, and commit with `git commit --no-verify` only if they agree.\n\n%s",
+			strings.Join(failures, "\n\n"))
 	}
-	return curlNote, nil
-}
-
-func withNote(note string) string {
-	if note == "" {
-		return ""
-	}
-	return "\n\n" + note
+	return nil
 }
 
 // checkedGitCommitDir finds a `git commit` without --no-verify in command and
@@ -207,10 +192,7 @@ func gitSubcommand(args []string) (string, []string) {
 
 // statusEntry is one changed file from `git status --porcelain=v1`.
 type statusEntry struct {
-	path      string
-	staged    bool
-	unstaged  bool
-	untracked bool
+	path string
 }
 
 // parseStatus returns the changed files in `git status --porcelain=v1` output,
@@ -225,12 +207,7 @@ func parseStatus(status string) []statusEntry {
 		if _, renamedTo, ok := strings.Cut(path, " -> "); ok {
 			path = renamedTo
 		}
-		entries = append(entries, statusEntry{
-			path:      path,
-			staged:    line[0] != ' ' && line[0] != '?',
-			unstaged:  line[1] != ' ',
-			untracked: line[:2] == "??",
-		})
+		entries = append(entries, statusEntry{path: path})
 	}
 	return entries
 }

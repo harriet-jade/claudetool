@@ -66,25 +66,17 @@ These block a command and tell the agent the better form.
 Runs when a Bash command contains `git commit` without `--no-verify`. It follows
 a `cd` earlier in the same command. It works on every changed file in the repo
 (staged, unstaged and new), because in `git add x && git commit` the hook runs
-before the `add`. Steps 1 to 4 run only when Go files changed. Steps 5 and 6
+before the `add`. Steps 1 to 3 run only when Go files changed. Steps 4 and 5
 run on every commit.
 
 In order:
 
-1. **Curly apostrophes.** In customer-facing Go strings on changed lines, a `'`
-   between two letters becomes `’` (`don't` → `don’t`, `Monzo's` → `Monzo’s`).
-   Comments are not changed, and neither are messages passed to `slog`,
-   `terrors`, `errors.New` or `fmt.Errorf`. Generated files are skipped. A file
-   whose changes were all staged is staged again. A partly staged file is
-   changed but not staged, so unstaged work stays unstaged. The agent is told
-   which lines changed. This runs at commit time because the agent can't type
-   `’`, so it could not edit those lines afterwards.
-2. **Checks — these block the commit on failure:**
+1. **Checks — these block the commit on failure:**
    - `go test` on the changed packages. A change in a top-level folder with a
      dot in its name (`service.foo`) tests the whole folder.
    - `staticcheck -tags integration -tests` on the same packages.
    - `svcchecker` on changed `service.*` folders.
-3. **Constants review — advice only.** A headless Claude reviews the diff with
+2. **Constants review — advice only.** A headless Claude reviews the diff with
    read-only access (Read, Grep, Glob) to the repo. Its feedback goes to the
    agent, and the commit still runs. Rules:
    - Put a constant in `proto/constants.go` only if other services use it, or
@@ -95,7 +87,7 @@ In order:
    - A value should not be a constant when it is already clear
      (`3 * time.Minute` does not need `ThreeMinutes`). If it has a role, name the
      role: `CreateHandlerTimeout = 3 * time.Minute`.
-4. **Idempotency review — advice only.** It runs at the same time as the
+3. **Idempotency review — advice only.** It runs at the same time as the
    constants review, when the change adds or changes an RPC handler signature or
    a file in a `handler/` folder. A headless Claude with the same read-only
    access follows each changed handler from start to end. At each side effect,
@@ -108,7 +100,7 @@ In order:
 
    An event that is published again, or the same row that is written again, is
    safe, so it does not flag them. Test files are not sent to it.
-5. **Comments review — advice only.** It runs at the same time as the other
+4. **Comments review — advice only.** It runs at the same time as the other
    reviews, when the change adds a comment in a `.proto`, Go, JS, TS, Python,
    shell or SQL file. Generated `*.pb.go` files are skipped. A headless Claude
    with the same read-only access looks only at the comments that the change
@@ -124,7 +116,7 @@ In order:
    - **No doc comments on short accessor methods** — a method whose body is
      one statement or a short guard, and whose name already says what it
      returns, has no doc comment. If the name is not clear, rename the method.
-6. **Writing review — advice only.** It runs at the same time as the other
+5. **Writing review — advice only.** It runs at the same time as the other
    reviews, when the change adds text to a document (`.md`, `.mdx`,
    `.markdown`, `.rst`) or adds a comment in a file that the comments review
    reads. Vendored documents are skipped. A headless Claude with no tools
