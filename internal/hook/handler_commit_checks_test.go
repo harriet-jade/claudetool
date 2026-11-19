@@ -3,6 +3,7 @@ package hook
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -115,6 +116,46 @@ func TestCommitChecksSkipsNoVerify(t *testing.T) {
 	// THEN - The checks don't run, so the commit is allowed.
 	if code != 0 {
 		t.Errorf("exit = %d, want 0 (allow); stderr: %s", code, stderr)
+	}
+}
+
+func TestCommitChecksSkipsLargeMerge(t *testing.T) {
+	cases := map[string]struct {
+		merging      bool
+		changedFiles int
+		wantCode     int
+	}{
+		"merge above the limit is skipped":    {merging: true, changedFiles: maxMergeFiles + 1, wantCode: 0},
+		"merge at the limit is checked":       {merging: true, changedFiles: maxMergeFiles, wantCode: 2},
+		"no merge above the limit is checked": {merging: false, changedFiles: maxMergeFiles + 1, wantCode: 2},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			// GIVEN - A committed package whose test fails, so the checks block the commit when they run...
+			root := newGoRepo(t, "t.Fatal(\"always fails\")")
+			commitAll(t, root)
+			// ...a change to that package and to other files, for changedFiles changed files in total...
+			writeRepoFile(t, root, "calc/calc.go", "package calc\n\nconst Two = 2\n")
+			for i := 1; i < tc.changedFiles; i++ {
+				writeRepoFile(t, root, fmt.Sprintf("notes/%d.txt", i), "note\n")
+			}
+			// ...and, for a merge, a merge that is not committed yet.
+			if tc.merging {
+				head, err := gitOutput(root, "rev-parse", "HEAD")
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeRepoFile(t, root, ".git/MERGE_HEAD", head)
+			}
+
+			// WHEN - Claude tries to commit.
+			code, stderr := runCommitChecks(t, root, `git commit -m "change"`)
+
+			// THEN - Only a merge with more than maxMergeFiles changed files skips the checks.
+			if code != tc.wantCode {
+				t.Errorf("exit = %d, want %d; stderr: %s", code, tc.wantCode, stderr)
+			}
+		})
 	}
 }
 

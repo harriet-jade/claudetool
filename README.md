@@ -153,6 +153,11 @@ In order:
 `git commit --no-verify` skips all of this. The block message tells the agent to
 ask me first.
 
+A merge commit with more than 25 changed files also skips all of this, and does
+not tell the agent. A merge from master can bring in hundreds of files that are
+not part of my change, and the checks then crash. A merge commit with 25 changed
+files or fewer gets all the checks.
+
 ### 3. After each edit
 
 **`semgrep`** — runs on each `.go` file the agent writes or edits, and reports

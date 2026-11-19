@@ -18,6 +18,10 @@ func init() {
 // maxCheckOutputLines keeps one noisy failure from flooding Claude's context.
 const maxCheckOutputLines = 60
 
+// maxMergeFiles is the number of changed files above which a merge commit skips the checks and the reviews. A merge
+// from master can change hundreds of files that are not part of the change, and the checks then crash.
+const maxMergeFiles = 25
+
 // gitOptionsWithValue are git's global options that take the next token as
 // their value, so `git -c key=val commit` still finds "commit".
 var gitOptionsWithValue = map[string]bool{
@@ -29,7 +33,8 @@ var gitOptionsWithValue = map[string]bool{
 // packages before Claude runs `git commit`, and blocks the commit if any fail.
 // Then it runs the reviews, which only give advice. The comments and writing reviews run on every commit, also with
 // no Go changes.
-// `git commit --no-verify` skips the checks and the reviews.
+// `git commit --no-verify` skips the checks and the reviews. A merge commit with more than maxMergeFiles changed
+// files also skips them.
 //
 // Use as a PreToolUse hook with matcher "Bash".
 func handleCommitChecks(in *Input) (*Output, error) {
@@ -59,6 +64,9 @@ func handleCommitChecks(in *Input) (*Output, error) {
 	}
 	entries := parseStatus(status)
 	if len(entries) == 0 {
+		return nil, nil
+	}
+	if len(entries) > maxMergeFiles && mergeInProgress(root) {
 		return nil, nil
 	}
 	packages, services := changedGoPackages(root, entries)
@@ -188,6 +196,13 @@ func gitSubcommand(args []string) (string, []string) {
 		}
 	}
 	return "", nil
+}
+
+// mergeInProgress reports whether the repo at root has a merge that is not committed yet. It also works in a
+// worktree, where .git is a file and not a folder.
+func mergeInProgress(root string) bool {
+	_, err := gitOutput(root, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+	return err == nil
 }
 
 // statusEntry is one changed file from `git status --porcelain=v1`.
