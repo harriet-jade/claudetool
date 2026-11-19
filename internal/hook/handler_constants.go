@@ -57,18 +57,24 @@ func uncommittedChange(root string, pathspecs ...string) (change, added string, 
 
 // runCommitReview returns the reviewer's REVISE feedback, or "" otherwise.
 func runCommitReview(name string, reviewer func(prompt, model, dir string) (string, error), prompt, root string) string {
-	logAsync(name, "DISPATCH", root)
-	out, err := reviewer(prompt, MediumBalanced.model(), root)
-	if err != nil {
-		logAsync(name, "ERROR: "+err.Error(), root)
-		return ""
-	}
-	verdict, feedback := parseVerdict(out)
-	logAsync(name, verdict, root)
+	verdict, feedback, _ := runReview(name, reviewer, MediumBalanced.model(), prompt, root)
 	if verdict != "REVISE" {
 		return ""
 	}
 	return feedback
+}
+
+// runReview runs the reviewer on model, and logs the result. ok is false if the reviewer did not run.
+func runReview(name string, reviewer func(prompt, model, dir string) (string, error), model, prompt, root string) (verdict, feedback string, ok bool) {
+	logAsync(name, "DISPATCH", root)
+	out, err := reviewer(prompt, model, root)
+	if err != nil {
+		logAsync(name, "ERROR: "+err.Error(), root)
+		return "", "", false
+	}
+	verdict, feedback = parseVerdict(out)
+	logAsync(name, verdict, root)
+	return verdict, feedback, true
 }
 
 func buildCommitReviewPrompt(rubric, change string) string {

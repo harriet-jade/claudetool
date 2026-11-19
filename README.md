@@ -158,7 +158,29 @@ not tell the agent. A merge from master can bring in hundreds of files that are
 not part of my change, and the checks then crash. A merge commit with 25 changed
 files or fewer gets all the checks.
 
-### 3. After each edit
+### 3. Before `gh pr create` — `one-change-per-pr`
+
+Runs when a Bash command contains `gh pr create` or `gh pr new`. It follows a
+`cd` earlier in the same command. A headless Claude (Opus) checks that the
+branch has one logical change. It gets the PR title, the commits, the diff
+stat and the diff from the merge base to `HEAD`, and has read-only access to
+the repo. Merges from master, generated files and vendored files are not part
+of the diff. The base is `--base`, or else the default branch of `origin`.
+
+A PR is one logical change when one sentence says what it does, and each part
+of the diff is necessary for that sentence. The bar for a split is high. The
+reviewer asks for a split only when the branch has two or more parts that are
+independent, that can each merge alone, and that are each large enough to
+review alone. Size is never a reason to split. Tests, docs, config, a refactor
+that the change needs, and small cleanups near the change stay in the PR.
+
+When the reviewer asks for a split, the PR is not created. The agent gets each
+change, its files, and the order to merge them in. The agent decides what to
+do. It does not ask me. The review runs only once for each `HEAD`, so an agent
+that does not agree can run the same command again, and the PR opens. New
+commits get a new review. If the reviewer fails to run, the PR opens.
+
+### 4. After each edit
 
 **`semgrep`** — runs on each `.go` file the agent writes or edits, and reports
 findings to the agent at once. For an edit, it reports only the findings on the
@@ -189,7 +211,7 @@ whole file for a Write). They wake the agent only when they find a problem:
 
 The reviewers are advice. The agent decides what to act on.
 
-### 4. After a push — `ci-watch`
+### 5. After a push — `ci-watch`
 
 After `git push`, `gh pr create` or `gh pr ready`, it watches the PR's CI in the
 background for up to 30 minutes. It wakes the agent only if a check fails, while
@@ -205,7 +227,8 @@ The claudetool entries in `~/.claude/settings.json`:
     "PreToolUse": [
       {"matcher": "Bash", "hooks": [{"type": "command", "command": "/Users/hturner/bin/claudetool hook no-git-c no-shell-loops no-inline-python no-inline-file no-exit-code-check no-shared-pr-body blank-pr-body"}]},
       {"matcher": "Bash|WebFetch", "hooks": [{"type": "command", "command": "/Users/hturner/bin/claudetool hook use-linear-mcp"}]},
-      {"matcher": "Bash", "hooks": [{"type": "command", "command": "/Users/hturner/bin/claudetool hook commit-checks", "timeout": 900}]}
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "/Users/hturner/bin/claudetool hook commit-checks", "timeout": 900}]},
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "/Users/hturner/bin/claudetool hook one-change-per-pr", "timeout": 600}]}
     ],
     "PostToolUse": [
       {"matcher": "Write|Edit|MultiEdit", "hooks": [
@@ -228,6 +251,9 @@ background reviewer must be its own entry, because `asyncRewake` is set per hook
 - `tail -f ~/.claude/claudetool-async.log` shows each reviewer run: `DISPATCH`,
   then `PASS`, `REVISE` or `ERROR`. A reviewer that fails to run never wakes the
   agent, so an `ERROR` here is the only sign.
+- `one-change-per-pr` records each `HEAD` that it reviewed as an empty file in
+  `claudetool/one-change-per-pr/` in the git folder (`git rev-parse --git-path
+  claudetool`). Delete the file to get a new review.
 - `~/.claude/ci-watch/` holds a pidfile for each branch that `ci-watch` is
   watching.
 - To try a handler by hand, pipe hook JSON into it:
@@ -239,7 +265,8 @@ background reviewer must be its own entry, because `asyncRewake` is set per hook
 - **A reviewer rule:** edit the `rubric` text in that reviewer's file, for
   example `handler_rpcwrapper.go`. The commit-time reviewers keep theirs in
   `handler_constants.go`, `handler_idempotency.go`, `handler_comments.go` and
-  `handler_writing.go`.
+  `handler_writing.go`. The PR reviewer keeps its rubric in
+  `handler_one_change_per_pr.go`.
 - **A comment principle:** add a section under `PRINCIPLES` in
   `handler_comments.go`. Give it a title, an "Applies when:" line that says when
   it fires, a "Rule:" line that says what the comment must do, and examples.
