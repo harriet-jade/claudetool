@@ -39,8 +39,8 @@ func containsComment(text string) bool {
 	return false
 }
 
-// reviewComments returns the comments in the uncommitted changes in root that fail a comment principle, or "" if there
-// are none, or if the review can't run.
+// reviewComments returns the comments in the uncommitted changes in root that are not allowed, or "" if there are none,
+// or if the review can't run. A comment is allowed only if a principle permits it.
 func reviewComments(root string) string {
 	change, added, ok := uncommittedChange(root, commentPathspecs...)
 	if !ok || !containsComment(added) {
@@ -53,16 +53,16 @@ func buildCommentsReviewPrompt(change string) string {
 	return fmt.Sprintf(`%s
 
 OUTPUT PROTOCOL
-If no comment in scope fails a principle, respond with exactly:
+If each comment in scope is allowed, respond with exactly:
 PASS
-This is also the answer when no comment matches a principle, and when each comment that matches a principle obeys it.
+This is the answer only when there are no comments in scope, or when each comment in scope is a directive, or matches a principle and obeys its rule.
 
-Otherwise respond with REVISE, then one section for each comment that fails:
+Otherwise respond with REVISE, then one section for each comment that is not allowed:
 REVISE
 ### <file>: <the first words of the comment>
 Principle: <the title of the principle>
-Problem: <why the comment does not obey the principle>
-Fix: <how to change the comment, with the new text if you can write it>
+Problem: <why the comment is not allowed>
+Fix: <"Remove the comment." under "No comments". Under another principle, how to change the comment, with the new text if you can write it>
 (nothing after the last section)
 
 --- BEGIN CHANGE (git diff, then any new files) ---
@@ -80,14 +80,18 @@ WHICH COMMENTS ARE IN SCOPE
 
 HOW TO REVIEW
 
+Comments are NOT allowed. A comment can stay only when one of the principles below applies to it, and the comment obeys the rule of that principle. The last principle, "No comments", applies to each other comment, and it says that the comment must be removed.
+
 1. Make a list of the comments that are in scope.
-2. For each comment, find the principle below whose conditions apply to it. A principle applies only when its conditions are definitely true for that comment. Most comments match no principle. If no principle definitely applies, do nothing with that comment: do not report it, and do not judge it by your own rules.
-3. For each comment that matches a principle, use the rule of that principle to check the comment. If the comment obeys the rule, do not report it.
-4. Report each comment that does not obey the rule of its principle. Say why it fails, and how to change it.
+2. For each comment, find the principle below whose conditions apply to it. A principle applies only when its conditions are definitely true for that comment. If no other principle definitely applies, "No comments" applies.
+3. Use the rule of that principle to check the comment. If the comment obeys the rule, do not report it.
+4. Report each comment that does not obey the rule of its principle. Under "No comments", this is each comment. Report it also when it is accurate, short or useful. Do not suggest a better comment, and do not suggest that the agent can keep it.
 
 The diff usually shows enough of the code around each comment. You can use Read, Grep and Glob in the root of the repository if it does not, but use them only for a few quick looks.
 
-Only the principles below are rules. Do not report a comment for a reason that is not in a principle. If you are not sure that a principle applies, or that a comment fails it, do not report the comment.
+DIRECTIVES ARE NOT COMMENTS
+
+Some lines use the syntax of a comment, but they are instructions to a tool. They are not in scope. Do not report them. For example: a shebang ("#!/bin/bash"), "//go:build", "//go:generate", "//go:embed", "// +build", "//nolint", "# noqa", "# type: ignore", "# shellcheck disable=", "// eslint-disable", "// @ts-ignore", "// @ts-expect-error", "// prettier-ignore", and "// Code generated ... DO NOT EDIT.". If you are not sure that a line is a directive, it is a comment.
 
 PRINCIPLES
 
@@ -119,17 +123,11 @@ Example of a bad comment, on the same RPC:
 
 This comment is bad. It describes how the handler works inside (function names, a table, a batch size), and the caller does not need to know these things. It also does not tell the caller about the dry run, commit=true or allow_resend=true. Fix: describe what the RPC does for the caller, and the request fields that change its behaviour.
 
-### No doc comments on short accessor methods
+### No comments
 
-Applies when: the comment is a doc comment on a method whose body is one statement or a short guard, and the method name already says what it returns.
+Applies when: no other principle above applies to the comment. This includes doc comments on functions, types and fields, comments in a function body, docstrings, and comments in SQL and shell scripts.
 
-Rule: Do not add a doc comment. Make the name clear instead.
-
-Example of good code, with no comment:
-
-    func (o *Order) SignaturesOverridden() bool {
-        return !o.SignatureOverriddenAt.IsZero()
-    }
+Rule: The comment is not allowed. Remove it. If the code is not clear without the comment, make the code clearer: for example, use better names, or move the code into a function whose name says what it does. This is a firm rule, not a preference. The agent must obey it.
 
 Example of a bad comment:
 
@@ -138,4 +136,4 @@ Example of a bad comment:
         return !o.SignatureOverriddenAt.IsZero()
     }
 
-This comment is bad. It says again what the name and the one-line body already show. Fix: remove the comment. If the name does not make the meaning clear, rename the method.`
+This comment is not allowed, because no other principle applies to it. Fix: remove the comment.`

@@ -98,8 +98,10 @@ func handleCommitChecks(in *Input) (*Output, error) {
 			"still runs, so check each one, and fix the real ones in a follow-up commit:\n"+idempotencyFeedback)
 	}
 	if commentsFeedback != "" {
-		notes = append(notes, "The comments review found comments that do not obey a comment principle. The "+
-			"commit still runs, so fix them in a follow-up commit:\n"+commentsFeedback)
+		notes = append(notes, "The comments review found comments that are not allowed. Comments are banned, "+
+			"except where a principle permits them. This is not optional: do not keep, shorten or rewrite a banned "+
+			"comment. The commit still runs, so make each fix below in a follow-up commit, before you do other "+
+			"work:\n"+commentsFeedback)
 	}
 	if writingFeedback != "" {
 		notes = append(notes, "The writing review found text in the comments and documents that is hard to read, "+

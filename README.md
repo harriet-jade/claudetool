@@ -124,18 +124,19 @@ In order:
    reviews, when the change adds a comment in a `.proto`, Go, JS, TS, Python,
    shell or SQL file. Generated `*.pb.go` files are skipped. A headless Claude
    with the same read-only access looks only at the comments that the change
-   adds or changes. Comments that were there before are out of scope. For each
-   comment, it finds a principle whose conditions definitely apply. Most
-   comments match no principle, and it ignores them. It reports a comment only
-   when the comment does not obey the rule of its principle. Each report gives
-   the comment, the principle, the problem and the fix. The principles:
+   adds or changes. Comments that were there before are out of scope. Comments
+   are banned by default. A comment can stay only when a principle applies to
+   it and the comment obeys the rule of that principle. Tool directives, such
+   as `//go:build`, `//nolint`, `# noqa` or a shebang, are not comments. Each
+   report gives the comment, the principle, the problem and the fix. The
+   message to the agent says that the fix is not optional. The principles:
    - **RPC comments** — a comment above an `rpc` in a `.proto` file tells the
      caller how to use the RPC and what they must know. It does not describe
      how the RPC works inside, unless the caller must know it. It can be
      several lines long, if each line has a purpose.
-   - **No doc comments on short accessor methods** — a method whose body is
-     one statement or a short guard, and whose name already says what it
-     returns, has no doc comment. If the name is not clear, rename the method.
+   - **No comments** — this applies to each comment that no other principle
+     applies to. The fix is to remove the comment, and, if necessary, make the
+     code clearer with better names.
 5. **Writing review — advice only.** It runs at the same time as the other
    reviews, when the change adds text to a document (`.md`, `.mdx`,
    `.markdown`, `.rst`) or adds a comment in a file that the comments review
@@ -268,8 +269,9 @@ background reviewer must be its own entry, because `asyncRewake` is set per hook
   `handler_writing.go`. The PR reviewer keeps its rubric in
   `handler_one_change_per_pr.go`.
 - **A comment principle:** add a section under `PRINCIPLES` in
-  `handler_comments.go`. Give it a title, an "Applies when:" line that says when
-  it fires, a "Rule:" line that says what the comment must do, and examples.
+  `handler_comments.go`, above "No comments". Give it a title, an "Applies
+  when:" line that says which comments it permits, a "Rule:" line that says what
+  the comment must do, and examples.
 - **A new guard:** add `internal/hook/handler_<name>.go` and register it:
 
   ```go

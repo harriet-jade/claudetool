@@ -59,6 +59,9 @@ func TestCommitChecksPassesOnCommentsAdvice(t *testing.T) {
 	if !strings.Contains(stdout, "Principle: RPC comments") {
 		t.Errorf("stdout = %q, want the reviewer’s advice", stdout)
 	}
+	if !strings.Contains(stdout, "This is not optional") {
+		t.Errorf("stdout = %q, want the firm instruction to fix the comments", stdout)
+	}
 	// ...and the reviewer was given the proto file and the principles.
 	if !strings.Contains(*prompt, "NEW FILE seizures.proto") {
 		t.Errorf("prompt does not contain the proto file:\n%s", *prompt)
@@ -68,8 +71,8 @@ func TestCommitChecksPassesOnCommentsAdvice(t *testing.T) {
 	}
 }
 
-func TestCommentsReviewSendsAccessorPrinciple(t *testing.T) {
-	// GIVEN - A git repo with a new Go file that has a doc comment on a short accessor method.
+func TestCommentsReviewBansCommentsWithNoPrinciple(t *testing.T) {
+	// GIVEN - A git repo with a new Go file that has a doc comment.
 	root := newEmptyRepo(t)
 	writeRepoFile(t, root, "order.go", `package order
 
@@ -78,14 +81,14 @@ func (o *Order) SignaturesOverridden() bool {
 	return !o.SignatureOverriddenAt.IsZero()
 }
 `)
-	prompt := stubCommitReviewer(t, &commentsReviewer, "PASS")
+	stubCommitReviewer(t, &commentsReviewer, "REVISE\n### order.go: SignaturesOverridden reports\nPrinciple: No comments\nFix: Remove the comment.")
 
 	// WHEN - The comments review runs.
-	reviewComments(root)
+	feedback := reviewComments(root)
 
-	// THEN - The reviewer is given the accessor principle.
-	if !strings.Contains(*prompt, "### No doc comments on short accessor methods") {
-		t.Errorf("prompt does not contain the accessor principle:\n%s", *prompt)
+	// THEN - The review returns the instruction to remove the comment.
+	if !strings.Contains(feedback, "Fix: Remove the comment.") {
+		t.Errorf("feedback = %q, want the instruction to remove the comment", feedback)
 	}
 }
 
