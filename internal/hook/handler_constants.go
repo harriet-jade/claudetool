@@ -41,7 +41,7 @@ func uncommittedChange(root string, pathspecs ...string) (change, added string, 
 	changeText.WriteString(diff)
 	for _, line := range strings.Split(diff, "\n") {
 		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			addedText.WriteString(line + "\n")
+			addedText.WriteString(strings.TrimPrefix(line, "+") + "\n")
 		}
 	}
 	for _, path := range strings.Fields(untracked) {

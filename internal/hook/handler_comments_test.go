@@ -92,6 +92,42 @@ func (o *Order) SignaturesOverridden() bool {
 	}
 }
 
+func TestCommentsReviewFindsCommentsInDiffLines(t *testing.T) {
+	const withComment = "package order\n\n// Total returns the sum.\nfunc Total() int {\n\t// explain this\n\treturn 1\n}\n"
+	cases := map[string]func(t *testing.T, root string){
+		"comment added to a committed file": func(t *testing.T, root string) {
+			writeRepoFile(t, root, "order.go", "package order\n\nfunc Total() int {\n\treturn 1\n}\n")
+			commitAll(t, root)
+			writeRepoFile(t, root, "order.go", withComment)
+		},
+		"new file staged before the commit": func(t *testing.T, root string) {
+			writeRepoFile(t, root, "readme.txt", "first\n")
+			commitAll(t, root)
+			writeRepoFile(t, root, "order.go", withComment)
+			gitRun(t, root, "add", "order.go")
+		},
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			// GIVEN - A git repo where the change adds Go comments as diff lines, with a "+" in front of each.
+			root := newEmptyRepo(t)
+			setup(t, root)
+			prompt := stubCommitReviewer(t, &commentsReviewer, "REVISE\n### order.go: Total returns\nPrinciple: No comments\nFix: Remove the comment.")
+
+			// WHEN - The comments review runs.
+			feedback := reviewComments(root)
+
+			// THEN - The reviewer runs, and its advice is returned.
+			if *prompt == "" {
+				t.Fatal("reviewer did not run, but the change adds comments")
+			}
+			if !strings.Contains(feedback, "Fix: Remove the comment.") {
+				t.Errorf("feedback = %q, want the reviewer’s advice", feedback)
+			}
+		})
+	}
+}
+
 func TestCommitChecksSkipsCommentsReviewWithoutNewComments(t *testing.T) {
 	// GIVEN - A git repo with a committed proto file that has a comment...
 	root := newEmptyRepo(t)
