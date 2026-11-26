@@ -11,6 +11,8 @@ func init() {
 	Register("use-linear-mcp", handleUseLinearMCP)
 }
 
+const linearSignedUploadPrefix = "https://storage.googleapis.com/uploads.linear.app/"
+
 const linearMCPMessage = "do not call Linear directly; use the Linear MCP server tools (mcp__linear-server__get_issue, etc.) instead"
 
 // linearCLIRe matches the linear-cli command as a standalone token.
@@ -57,7 +59,7 @@ func looksLikeLinearCLI(cmd string) bool {
 		return true
 	}
 	if (strings.Contains(lower, "curl") || strings.Contains(lower, "wget")) &&
-		strings.Contains(lower, "linear.app") {
+		strings.Contains(strings.ReplaceAll(lower, linearSignedUploadPrefix, ""), "linear.app") {
 		return true
 	}
 	if linearCLIRe.MatchString(lower) {

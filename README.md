@@ -79,7 +79,7 @@ These block a command and tell the agent the better form.
 | `no-exit-code-check` | `$?` checks | run the command and read its output |
 | `no-shared-pr-body` | the shared `/tmp/pr-body.md` path | a unique file |
 | `blank-pr-body` | `gh pr create/new/edit` that sets a description (`--body "..."`, `--body-file`, `--fill*`, `--template`) | `--body ""` — I write PR descriptions myself |
-| `use-linear-mcp` | `gh`/`curl`/`wget`/`linear-cli` calls to Linear, and WebFetch on `linear.app` | the Linear MCP tools |
+| `use-linear-mcp` | `gh`/`curl`/`wget`/`linear-cli` calls to Linear, and WebFetch on `linear.app`. It allows an upload to the signed URL that the MCP `prepare_file_upload` tool gives (`https://storage.googleapis.com/uploads.linear.app/...`), because the MCP tools cannot upload a file themselves | the Linear MCP tools |
 
 ### 2. Before `git commit` — `commit-checks`
 

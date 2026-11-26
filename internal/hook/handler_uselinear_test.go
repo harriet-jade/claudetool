@@ -19,6 +19,8 @@ func TestUseLinearMCPBlocksBash(t *testing.T) {
 		{"linear-cli piped", "linear-cli issue list | head"},
 		{"linear-cli after &&", `git status && linear-cli issue list`},
 		{"linear-cli relative path", "./linear-cli issue list"},
+		{"upload next to a linear API call", `curl -X PUT --data-binary @a.png "https://storage.googleapis.com/uploads.linear.app/x/y?X-Goog-Signature=abc" && curl https://api.linear.app/graphql`},
+		{"linear.app in another bucket path", `curl -X PUT --data-binary @a.png "https://storage.googleapis.com/other/linear.app/x"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,6 +64,7 @@ func TestUseLinearMCPAllows(t *testing.T) {
 		"git status",
 		"gh pr list",
 		"curl https://example.com",
+		`curl -X PUT --data-binary @chart.png -H "content-type: image/png" -H 'Content-Disposition: attachment; filename="chart.png"' "https://storage.googleapis.com/uploads.linear.app/d36e/3ae0/b50a?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Signature=abc"`,
 	} {
 		t.Run("allow bash: "+cmd, func(t *testing.T) {
 			input := makeToolInput("PreToolUse", "Bash", BashInput{Command: cmd})
