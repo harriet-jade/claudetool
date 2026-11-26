@@ -41,6 +41,51 @@ func TestContainsComment(t *testing.T) {
 	}
 }
 
+func TestTestFunctionRe(t *testing.T) {
+	// GIVEN - Changed text that may or may not add a test function.
+	cases := map[string]bool{
+		"func TestTotal(t *testing.T) {":       true,
+		"def test_total():":                    true,
+		"    async def test_total(client):":    true,
+		"it('adds the numbers', () => {":       true,
+		"  test(\"adds the numbers\", () => {": true,
+		"func newRepo(t *testing.T) string {":  false,
+		"if re.test(line) {":                   false,
+		"def total(numbers):":                  false,
+		"x := Testing{}":                       false,
+	}
+	for text, want := range cases {
+		t.Run(text, func(t *testing.T) {
+			// WHEN - The quick check runs.
+			got := testFunctionRe.MatchString(text)
+
+			// THEN - Only the start of a test function starts a review.
+			if got != want {
+				t.Errorf("testFunctionRe.MatchString(%q) = %v, want %v", text, got, want)
+			}
+		})
+	}
+}
+
+func TestCommentsReviewRunsOnNewTestWithoutComments(t *testing.T) {
+	// GIVEN - A git repo with a new Go test file that has no comments.
+	root := newEmptyRepo(t)
+	writeRepoFile(t, root, "order_test.go", "package order\n\nfunc TestTotal(t *testing.T) {\n\tif Total() != 1 {\n\t\tt.Fail()\n\t}\n}\n")
+	prompt := stubCommitReviewer(t, &commentsReviewer, "REVISE\n### order_test.go: TestTotal\nPrinciple: Test comments\nFix: Add the comments.")
+
+	// WHEN - The comments review runs.
+	feedback := reviewComments(root)
+
+	// THEN - The reviewer runs with the test comments principle...
+	if !strings.Contains(*prompt, "### Test comments") {
+		t.Errorf("prompt does not contain the test comments principle:\n%s", *prompt)
+	}
+	// ...and its advice is returned.
+	if !strings.Contains(feedback, "Principle: Test comments") {
+		t.Errorf("feedback = %q, want the reviewer’s advice", feedback)
+	}
+}
+
 func TestCommitChecksPassesOnCommentsAdvice(t *testing.T) {
 	// GIVEN - A git repo with no Go code, and a new proto file whose RPC has a comment...
 	root := newEmptyRepo(t)

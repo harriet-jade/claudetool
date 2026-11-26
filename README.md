@@ -121,22 +121,35 @@ In order:
    An event that is published again, or the same row that is written again, is
    safe, so it does not flag them. Test files are not sent to it.
 4. **Comments review — advice only.** It runs at the same time as the other
-   reviews, when the change adds a comment in a `.proto`, Go, JS, TS, Python,
-   shell or SQL file. Generated `*.pb.go` files are skipped. A headless Claude
-   with the same read-only access looks only at the comments that the change
-   adds or changes. Comments that were there before are out of scope. Comments
+   reviews, when the change adds a comment or a test function in a `.proto`,
+   Go, JS, TS, Python, shell or SQL file. Generated `*.pb.go` files are
+   skipped. A headless Claude with the same read-only access looks only at the
+   comments that the change adds or changes, and at the test functions that
+   the change adds. Comments that were there before are out of scope. Comments
    are banned by default. A comment can stay only when a principle applies to
    it and the comment obeys the rule of that principle. Tool directives, such
    as `//go:build`, `//nolint`, `# noqa` or a shebang, are not comments. Each
-   report gives the comment, the principle, the problem and the fix. The
-   message to the agent says that the fix is not optional. The principles:
+   report gives the comment or the test function, the principle, the problem
+   and the fix. The message to the agent says that the fix is not optional.
+   The principles:
    - **RPC comments** — a comment above an `rpc` in a `.proto` file tells the
      caller how to use the RPC and what they must know. It does not describe
      how the RPC works inside, unless the caller must know it. It can be
      several lines long, if each line has a purpose.
+   - **Test comments** — `GIVEN -`, `WHEN -`, `THEN -` and `...` comments in a
+     test function are the only comments that a test function can have, and
+     each new test function must have at least one GIVEN, one WHEN and one
+     THEN. GIVEN describes the setup, WHEN the one action, and THEN the
+     expected result, each in words and directly above its code. `...and`
+     continues a part. A test can repeat WHEN and THEN for a sequence of
+     steps, and a table-driven test has GIVEN above the table. The reviewer
+     does not report small differences in words or format. A test function
+     that was there before does not need the comments, also if the change
+     edits it.
    - **No comments** — this applies to each comment that no other principle
-     applies to. The fix is to remove the comment, and, if necessary, make the
-     code clearer with better names.
+     applies to. This includes labels on table cases and doc comments on
+     helper functions in test files. The fix is to remove the comment, and,
+     if necessary, make the code clearer with better names.
 5. **Writing review — advice only.** It runs at the same time as the other
    reviews, when the change adds text to a document (`.md`, `.mdx`,
    `.markdown`, `.rst`) or adds a comment in a file that the comments review
